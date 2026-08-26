@@ -19,6 +19,9 @@ def main():
     parser.add_argument("--location", default=Config.TARGET_LOCATION, help="Localização desejada (ex: Brasil, Remoto)")
     parser.add_argument("--min-score", type=int, default=Config.MIN_MATCH_SCORE, help="Porcentagem mínima de match ATS para candidatar-se")
     parser.add_argument("--dry-run", action="store_true", help="Apenas analisa e gera relatórios/PDFs sem enviar candidaturas")
+    parser.add_argument("--enable-linkedin-posts", dest="enable_linkedin_posts", action="store_true", help="Ativa coleta de posts de recrutadores no LinkedIn")
+    parser.add_argument("--disable-linkedin-posts", dest="enable_linkedin_posts", action="store_false", help="Desativa coleta de posts de recrutadores")
+    parser.set_defaults(enable_linkedin_posts=None)
     args = parser.parse_args()
 
     print("=" * 65)
@@ -42,7 +45,17 @@ def main():
             filter_cfg = json.loads(Config.SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
     except: filter_cfg={}
 
-    raw_jobs = collect_all_jobs(args.keywords, location=args.location, limit_per_source=filter_cfg.get("limit_per_source", 8))
+    # LinkedIn posts de recrutadores: CLI sobrepoe config; default True se não definido
+    enable_posts = filter_cfg.get("enable_linkedin_posts", True)
+    if args.enable_linkedin_posts is not None:
+        enable_posts = args.enable_linkedin_posts
+    linkedin_posts_limit = int(filter_cfg.get("linkedin_posts_limit", filter_cfg.get("limit_per_source", 8)) or 8)
+    if enable_posts:
+        print(f"[*] Posts de recrutadores LinkedIn: ATIVADO (limite {linkedin_posts_limit}/keyword)")
+    else:
+        print(f"[*] Posts de recrutadores LinkedIn: DESATIVADO")
+
+    raw_jobs = collect_all_jobs(args.keywords, location=args.location, limit_per_source=filter_cfg.get("limit_per_source", 8), enable_linkedin_posts=enable_posts, linkedin_posts_limit=linkedin_posts_limit)
 
     # aplicar filtros avançados antes de salvar
     if filter_cfg:
