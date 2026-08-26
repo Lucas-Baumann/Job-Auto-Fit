@@ -1,0 +1,23 @@
+# Secrets / local
+.env
+*.db
+*.sqlite
+search_config.json
+
+# Gerados
+output/
+reports/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Playwright
+test-results/
+playwright/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
