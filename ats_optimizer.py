@@ -59,10 +59,21 @@ def call_llm(prompt: str) -> str:
         return ""
     if provider == "groq" and Config.GROQ_API_KEY:
         return _call_openai_compat(prompt, Config.GROQ_API_KEY, "https://api.groq.com/openai/v1/chat/completions", "llama3-8b-8192")
+    if provider == "openrouter" and Config.OPENROUTER_API_KEY:
+        try:
+            headers = {"Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", "Content-Type": "application/json", "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", "X-Title": "JobAutoFit"}
+            payload = {"model": "meta-llama/llama-3.1-8b-instruct:free", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=45)
+            if r.status_code == 200:
+                return r.json()["choices"][0]["message"]["content"]
+            print(f"[ATS AI] OpenRouter erro {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            print(f"[ATS AI] OpenRouter erro: {e}")
+        return ""
     if provider == "custom" and Config.CUSTOM_LLM_URL and Config.CUSTOM_LLM_KEY:
         return _call_openai_compat(prompt, Config.CUSTOM_LLM_KEY, Config.CUSTOM_LLM_URL, "default")
 
-    if provider == "ollama" or not any([Config.GEMINI_API_KEY, Config.OPENAI_API_KEY, Config.CLAUDE_API_KEY, Config.GROQ_API_KEY, Config.CUSTOM_LLM_KEY]):
+    if provider == "ollama" or not any([Config.GEMINI_API_KEY, Config.OPENAI_API_KEY, Config.CLAUDE_API_KEY, Config.GROQ_API_KEY, Config.OPENROUTER_API_KEY, Config.CUSTOM_LLM_KEY]):
         try:
             url = f"{Config.OLLAMA_HOST}/api/generate"
             payload = {"model": Config.OLLAMA_MODEL, "prompt": prompt, "stream": False}

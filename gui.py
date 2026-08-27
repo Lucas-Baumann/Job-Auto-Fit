@@ -86,12 +86,19 @@ class App(tb.Window):
         super().__init__(themename="darkly")
         self.title("JobAutoFit — Automação Completa (Gupy / LinkedIn / ATS)")
         self.geometry("1280x820"); self.minsize(1200,750)
-        # centralizar na tela
+        # abrir em tela cheia (maximizado) — solicitado
+        try:
+            self.state('zoomed')
+        except:
+            try: self.attributes('-zoomed', True)
+            except: pass
+        # fallback centralizar se não maximizou
         self.update_idletasks()
         try:
-            sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
-            x = (sw - 1280)//2; y = (sh - 820)//2 - 20
-            self.geometry(f"1280x820+{max(0,x)}+{max(0,y)}")
+            if self.state() != 'zoomed':
+                sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
+                x = (sw - 1280)//2; y = (sh - 820)//2 - 20
+                self.geometry(f"1280x820+{max(0,x)}+{max(0,y)}")
         except: pass
         # ícone da janela (.ico)
         try:
@@ -116,6 +123,7 @@ class App(tb.Window):
         self.var_openai_key=tk.StringVar(value=self.env.get("OPENAI_API_KEY",""))
         self.var_claude_key=tk.StringVar(value=self.env.get("CLAUDE_API_KEY",""))
         self.var_groq_key=tk.StringVar(value=self.env.get("GROQ_API_KEY",""))
+        self.var_openrouter_key=tk.StringVar(value=self.env.get("OPENROUTER_API_KEY",""))
         self.var_custom_url=tk.StringVar(value=self.env.get("CUSTOM_LLM_URL",""))
         self.var_custom_key=tk.StringVar(value=self.env.get("CUSTOM_LLM_KEY",""))
         self.var_smtp_host=tk.StringVar(value=self.env.get("SMTP_HOST","smtp.gmail.com"))
@@ -600,37 +608,75 @@ class App(tb.Window):
     # IA
     def _build_ia(self):
         f=self.tab_ia
-        card=tb.Labelframe(f,text="Provedor IA (gratuito ou pago) — campo OPCIONAL",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
+        card=tb.Labelframe(f,text="Provedor IA — campo OPCIONAL (selecione 1)",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
         row=tb.Frame(card); row.pack(fill=X)
-        tb.Label(row,text="Provedor").pack(side=LEFT,padx=5); self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","ollama","openai","claude","groq","custom"],state="readonly",width=12); self.combo_llm.pack(side=LEFT,padx=5)
-        info_icon(row, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago, use sua chave").pack(side=LEFT)
-        tb.Label(row,text="Gemini Key").pack(side=LEFT,padx=(15,5)); self.ent_gemini=tb.Entry(row,textvariable=self.var_gemini_key,show="*",width=32); self.ent_gemini.pack(side=LEFT,padx=5,fill=X,expand=True)
-        info_icon(row, "Chave gratuita do Google Gemini. Deixe em branco para usar heurístico ou Ollama/outra IA paga.").pack(side=LEFT)
-        def toggle(): self.ent_gemini.config(show="" if self.ent_gemini.cget("show")=="*" else "*"); btn_show.config(text="Ocultar" if self.ent_gemini.cget("show")=="" else "Mostrar")
-        btn_show=tb.Button(row,text="Mostrar",bootstyle="secondary-outline",command=toggle,width=8); btn_show.pack(side=LEFT,padx=5)
-        self.btn_test_gemini=tb.Button(row,text="Testar Conexão",bootstyle="success-outline",command=self.test_gemini); self.btn_test_gemini.pack(side=LEFT,padx=5)
+        tb.Label(row,text="Provedor").pack(side=LEFT,padx=5)
+        self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","openrouter","ollama","openai","claude","groq","custom"],state="readonly",width=14); self.combo_llm.pack(side=LEFT,padx=5)
+        info_icon(row, "Escolha 1 IA que reescreve seu currículo/Carta.\n• gemini = gratuito (recomendado)\n• openrouter = gratuito com várias IAs (recomendado)\n• ollama = local gratuito\n• openai/claude/groq = pago").pack(side=LEFT)
+        self.btn_test_gemini=tb.Button(row,text="Testar Conexão",bootstyle="success-outline",command=self.test_gemini); self.btn_test_gemini.pack(side=RIGHT,padx=5)
         self.lbl_ai_status=tb.Label(card,text="",font=("Segoe UI",8,"bold")); self.lbl_ai_status.pack(anchor=W,pady=(6,0))
-        tb.Label(card,text="Gemini gratuito: aistudio.google.com/app/apikey — deixe em branco para heurístico. Funções com IA ficam cinza sem chave.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W)
-        row2=tb.Frame(card); row2.pack(fill=X,pady=6)
-        tb.Label(row2,text="Ollama Host").pack(side=LEFT,padx=5); self.ent_ollama_host=tb.Entry(row2,textvariable=self.var_ollama_host,width=28); self.ent_ollama_host.pack(side=LEFT,padx=5)
-        info_icon(row2, "IA local gratuita. Instale em ollama.com e rode 'ollama run llama3'").pack(side=LEFT)
-        tb.Label(row2,text="Modelo").pack(side=LEFT,padx=5); self.ent_ollama_model=tb.Entry(row2,textvariable=self.var_ollama_model,width=18); self.ent_ollama_model.pack(side=LEFT,padx=5)
-        # Linha chaves pagas
-        row3=tb.Frame(card); row3.pack(fill=X,pady=6)
-        tb.Label(row3,text="OpenAI Key").pack(side=LEFT,padx=5); self.ent_openai=tb.Entry(row3,textvariable=self.var_openai_key,show="*",width=22); self.ent_openai.pack(side=LEFT,padx=5)
-        info_icon(row3, "platform.openai.com/api-keys — pago, modelo gpt-4o-mini").pack(side=LEFT)
-        tb.Label(row3,text="Claude Key").pack(side=LEFT,padx=5); self.ent_claude=tb.Entry(row3,textvariable=self.var_claude_key,show="*",width=22); self.ent_claude.pack(side=LEFT,padx=5)
-        info_icon(row3, "console.anthropic.com — pago, modelo claude-3-haiku").pack(side=LEFT)
-        tb.Label(row3,text="Groq Key").pack(side=LEFT,padx=5); self.ent_groq=tb.Entry(row3,textvariable=self.var_groq_key,show="*",width=22); self.ent_groq.pack(side=LEFT,padx=5)
-        info_icon(row3, "console.groq.com — gratuito/pago, rápido").pack(side=LEFT)
-        row4=tb.Frame(card); row4.pack(fill=X,pady=4)
-        tb.Label(row4,text="Custom URL (compatível OpenAI)").pack(side=LEFT,padx=5); self.ent_custom_url=tb.Entry(row4,textvariable=self.var_custom_url,width=38); self.ent_custom_url.pack(side=LEFT,padx=5,fill=X,expand=True)
-        info_icon(row4, "Para provedores tipo DeepSeek, Mistral, Together, etc. Ex: https://api.deepseek.com/v1/chat/completions").pack(side=LEFT)
-        tb.Label(row4,text="Custom Key").pack(side=LEFT,padx=5); self.ent_custom_key=tb.Entry(row4,textvariable=self.var_custom_key,show="*",width=22); self.ent_custom_key.pack(side=LEFT,padx=5)
-        # trace para habilitar/desabilitar
-        self.var_gemini_key.trace_add("write", lambda *_: self._update_ai_state())
-        self.var_llm_provider.trace_add("write", lambda *_: self._update_ai_state())
-        self.after(300, self._update_ai_state)
+        # frame dinâmico - só mostra o campo do provedor selecionado
+        self.frame_ia_dynamic = tb.Frame(card)
+        self.frame_ia_dynamic.pack(fill=X, pady=6)
+        # trace para reconstruir campo único
+        self.var_llm_provider.trace_add("write", lambda *_: (self._rebuild_ia_fields(), self._update_ai_state()))
+        for v in [self.var_gemini_key, self.var_openrouter_key, self.var_ollama_host, self.var_openai_key, self.var_claude_key, self.var_groq_key, self.var_custom_url]:
+            try: v.trace_add("write", lambda *_: self._update_ai_state())
+            except: pass
+        self.after(300, lambda: (self._rebuild_ia_fields(), self._update_ai_state()))
+
+    def _rebuild_ia_fields(self):
+        # limpa e recria apenas o campo do provedor selecionado
+        for w in self.frame_ia_dynamic.winfo_children(): w.destroy()
+        p = self.var_llm_provider.get()
+        # helper para criar entry com mostrar/ocultar
+        def make_key_row(parent, label, var, info, placeholder=""):
+            frm = tb.Frame(parent); frm.pack(fill=X, pady=2)
+            tb.Label(frm, text=label, width=14, anchor=W).pack(side=LEFT, padx=5)
+            ent = tb.Entry(frm, textvariable=var, show="*", width=42)
+            ent.pack(side=LEFT, padx=5, fill=X, expand=True)
+            if placeholder and not var.get(): ent.insert(0, placeholder)
+            info_icon(frm, info).pack(side=LEFT, padx=4)
+            def toggle(): ent.config(show="" if ent.cget("show")=="*" else "*"); btn.config(text="Ocultar" if ent.cget("show")=="" else "Mostrar")
+            btn = tb.Button(frm, text="Mostrar", bootstyle="secondary-outline", width=7, command=toggle); btn.pack(side=LEFT, padx=5)
+            # guardar refs para _update_ai_state desabilitar se necessário
+            if p=="gemini": self.ent_gemini = ent
+            elif p=="openrouter": self.ent_openrouter = ent
+            elif p=="openai": self.ent_openai = ent
+            elif p=="claude": self.ent_claude = ent
+            elif p=="groq": self.ent_groq = ent
+            elif p=="custom": self.ent_custom_key = ent
+            return ent
+        if p == "gemini":
+            make_key_row(self.frame_ia_dynamic, "Gemini Key", self.var_gemini_key, "Gratuito: aistudio.google.com/app/apikey\nDeixe vazio para heurístico")
+            tb.Label(self.frame_ia_dynamic, text="Recomendado gratuito: Gemini ou OpenRouter. Sem chave usa heurístico e funções ficam cinza.", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=(4,0))
+        elif p == "openrouter":
+            make_key_row(self.frame_ia_dynamic, "OpenRouter Key", self.var_openrouter_key, "Gratuito: openrouter.ai/keys\nAgrupa Gemini/Claude/Llama gratuitos. Recomendado!")
+            tb.Label(self.frame_ia_dynamic, text="OpenRouter — chaves gratuitas com vários modelos (openrouter.ai/keys). Use modelo free: meta-llama/llama-3.1-8b-instruct:free", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=(2,0))
+        elif p == "ollama":
+            frm = tb.Frame(self.frame_ia_dynamic); frm.pack(fill=X, pady=2)
+            tb.Label(frm, text="Ollama Host", width=14, anchor=W).pack(side=LEFT, padx=5)
+            self.ent_ollama_host = tb.Entry(frm, textvariable=self.var_ollama_host, width=28); self.ent_ollama_host.pack(side=LEFT, padx=5)
+            info_icon(frm, "IA local gratuita. Instale ollama.com e rode 'ollama run llama3'").pack(side=LEFT)
+            tb.Label(frm, text="Modelo").pack(side=LEFT, padx=5)
+            self.ent_ollama_model = tb.Entry(frm, textvariable=self.var_ollama_model, width=18); self.ent_ollama_model.pack(side=LEFT, padx=5)
+        elif p == "openai":
+            make_key_row(self.frame_ia_dynamic, "OpenAI Key", self.var_openai_key, "platform.openai.com/api-keys — pago gpt-4o-mini")
+        elif p == "claude":
+            make_key_row(self.frame_ia_dynamic, "Claude Key", self.var_claude_key, "console.anthropic.com — pago claude-3-haiku")
+        elif p == "groq":
+            make_key_row(self.frame_ia_dynamic, "Groq Key", self.var_groq_key, "console.groq.com — rápido")
+        elif p == "custom":
+            frm = tb.Frame(self.frame_ia_dynamic); frm.pack(fill=X, pady=2)
+            tb.Label(frm, text="Custom URL", width=14, anchor=W).pack(side=LEFT, padx=5)
+            self.ent_custom_url = tb.Entry(frm, textvariable=self.var_custom_url, width=38); self.ent_custom_url.pack(side=LEFT, padx=5, fill=X, expand=True)
+            info_icon(frm, "Ex: https://api.deepseek.com/v1/chat/completions").pack(side=LEFT, padx=4)
+            make_key_row(self.frame_ia_dynamic, "Custom Key", self.var_custom_key, "Chave do provedor custom")
+        # garantir refs para quem não foi recriado ainda
+        for attr in ["ent_gemini","ent_openrouter","ent_ollama_host","ent_openai","ent_claude","ent_groq","ent_custom_url"]:
+            if not hasattr(self, attr):
+                try: setattr(self, attr, tb.Entry(self.frame_ia_dynamic))
+                except: pass
         card2=tb.Labelframe(f,text="E-mail SMTP (envio automático, opcional)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
         hdr2=tb.Frame(card2); hdr2.pack(fill=X); tb.Label(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr2, "SMTP = protocolo de envio de e-mail.\nGmail: smtp.gmail.com:587 + Senha de App (myaccount.google.com > Segurança > Senhas de app).\nOutlook: smtp.office365.com:587\nSe deixar vazio, o sistema só gera PDFs e relatório (não envia).").pack(side=LEFT,padx=4)
         g=tb.Frame(card2); g.pack(fill=X, pady=(6,0)); g.columnconfigure(1,weight=1); g.columnconfigure(3,weight=1)
@@ -770,28 +816,43 @@ class App(tb.Window):
         has_openai = bool(self.var_openai_key.get().strip())
         has_claude = bool(self.var_claude_key.get().strip())
         has_groq = bool(self.var_groq_key.get().strip())
+        has_openrouter = bool(self.var_openrouter_key.get().strip())
         has_custom = bool(self.var_custom_url.get().strip() and self.var_custom_key.get().strip())
         if p == "gemini": ai_available = has_gemini
         elif p == "openai": ai_available = has_openai
         elif p == "claude": ai_available = has_claude
         elif p == "groq": ai_available = has_groq
+        elif p == "openrouter": ai_available = has_openrouter
         elif p == "custom": ai_available = has_custom
         elif p == "ollama": ai_available = True
         else: ai_available = False
         if hasattr(self, 'btn_test_gemini'):
-            need_key = {"gemini": has_gemini, "openai": has_openai, "claude": has_claude, "groq": has_groq, "custom": has_custom, "ollama": True}.get(p, False)
+            need_key = {"gemini": has_gemini, "openai": has_openai, "claude": has_claude, "groq": has_groq, "openrouter": has_openrouter, "custom": has_custom, "ollama": True}.get(p, False)
             self.btn_test_gemini.config(state=NORMAL if need_key else DISABLED, bootstyle="success-outline" if need_key else "secondary")
-        # habilitar apenas campos do provedor ativo
-        if hasattr(self, 'ent_gemini'): self.ent_gemini.config(state=NORMAL if p=="gemini" else DISABLED)
-        if hasattr(self, 'ent_openai'): self.ent_openai.config(state=NORMAL if p=="openai" else DISABLED)
-        if hasattr(self, 'ent_claude'): self.ent_claude.config(state=NORMAL if p=="claude" else DISABLED)
-        if hasattr(self, 'ent_groq'): self.ent_groq.config(state=NORMAL if p=="groq" else DISABLED)
+        # habilitar apenas campos do provedor ativo (para modo dinâmico, só o visível existe)
+        if hasattr(self, 'ent_gemini'): 
+            try: self.ent_gemini.config(state=NORMAL if p=="gemini" else DISABLED)
+            except: pass
+        if hasattr(self, 'ent_openai'): 
+            try: self.ent_openai.config(state=NORMAL if p=="openai" else DISABLED)
+            except: pass
+        if hasattr(self, 'ent_claude'): 
+            try: self.ent_claude.config(state=NORMAL if p=="claude" else DISABLED)
+            except: pass
+        if hasattr(self, 'ent_groq'): 
+            try: self.ent_groq.config(state=NORMAL if p=="groq" else DISABLED)
+            except: pass
+        if hasattr(self, 'ent_openrouter'): 
+            try: self.ent_openrouter.config(state=NORMAL if p=="openrouter" else DISABLED)
+            except: pass
         if hasattr(self, 'ent_ollama_host'):
             s = NORMAL if p=="ollama" else DISABLED
-            self.ent_ollama_host.config(state=s); self.ent_ollama_model.config(state=s)
+            try: self.ent_ollama_host.config(state=s); self.ent_ollama_model.config(state=s)
+            except: pass
         if hasattr(self, 'ent_custom_url'):
             s2 = NORMAL if p=="custom" else DISABLED
-            self.ent_custom_url.config(state=s2); self.ent_custom_key.config(state=s2)
+            try: self.ent_custom_url.config(state=s2); self.ent_custom_key.config(state=s2)
+            except: pass
         if hasattr(self, 'lbl_ai_status'):
             if ai_available:
                 self.lbl_ai_status.config(text=f"✓ IA habilitada ({p}) — reestruturação ATS e carta com IA ativas", bootstyle="success")
@@ -808,13 +869,36 @@ class App(tb.Window):
                 self.lbl_exec_ai.config(text="IA desabilitada — execução usará heurístico (sem reestruturação por IA). Preencha a chave para habilitar.", bootstyle="secondary")
 
     def test_gemini(self):
-        key=self.var_gemini_key.get().strip()
-        if not key: messagebox.showwarning("Gemini","Informe a key"); return
+        # testa o provedor selecionado
+        p=self.var_llm_provider.get()
+        key_map={"gemini":self.var_gemini_key.get().strip(),"openrouter":self.var_openrouter_key.get().strip(),"openai":self.var_openai_key.get().strip(),"claude":self.var_claude_key.get().strip(),"groq":self.var_groq_key.get().strip(),"custom":self.var_custom_key.get().strip(),"ollama":"ok"}
+        key=key_map.get(p,"")
+        if p!="ollama" and not key: messagebox.showwarning("IA", f"Informe a chave de '{p}'"); return
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=key); m=genai.GenerativeModel("gemini-1.5-flash"); r=m.generate_content("Responda OK")
-            messagebox.showinfo("Gemini",r.text[:200])
-        except Exception as e: messagebox.showerror("Gemini",str(e))
+            if p=="gemini":
+                import google.generativeai as genai
+                genai.configure(api_key=key); m=genai.GenerativeModel("gemini-1.5-flash"); r=m.generate_content("Responda OK")
+                messagebox.showinfo("Gemini", r.text[:200])
+            elif p=="openrouter":
+                from ats_optimizer import _call_openai_compat
+                ans=_call_openai_compat("Responda apenas OK", key, "https://openrouter.ai/api/v1/chat/completions", "meta-llama/llama-3.1-8b-instruct:free")
+                messagebox.showinfo("OpenRouter", ans[:400] if ans else "Sem resposta — verifique chave/modelo free")
+            elif p=="ollama":
+                import requests; r=requests.get(f"{self.var_ollama_host.get().strip()}/api/tags", timeout=5); messagebox.showinfo("Ollama", f"OK — {r.status_code}" if r.status_code==200 else r.text[:300])
+            else:
+                # openai/claude/groq/custom via call_llm
+                from ats_optimizer import call_llm
+                # forçar provider temporário
+                import config; old=config.Config.LLM_PROVIDER; config.Config.LLM_PROVIDER=p
+                # injetar chave temporária se necessário
+                if p=="openai": config.Config.OPENAI_API_KEY=key
+                elif p=="claude": config.Config.CLAUDE_API_KEY=key
+                elif p=="groq": config.Config.GROQ_API_KEY=key
+                elif p=="custom": config.Config.CUSTOM_LLM_KEY=key
+                ans=call_llm("Responda apenas OK")
+                config.Config.LLM_PROVIDER=old
+                messagebox.showinfo(p, ans[:400] if ans else "Sem resposta")
+        except Exception as e: messagebox.showerror(p, str(e))
 
     # Execução
     def _build_exec(self):
@@ -994,6 +1078,9 @@ class App(tb.Window):
         self.github_tree=tb.Treeview(f, columns=cols, show="headings", bootstyle="dark", height=14)
         self.github_tree.heading("star", text="⭐"); self.github_tree.heading("repo", text="Repositório"); self.github_tree.heading("lang", text="Lang"); self.github_tree.heading("stars", text="★"); self.github_tree.heading("desc", text="Descrição")
         self.github_tree.column("star", width=40, anchor=CENTER); self.github_tree.column("repo", width=200); self.github_tree.column("lang", width=90, anchor=CENTER); self.github_tree.column("stars", width=50, anchor=CENTER); self.github_tree.column("desc", width=400)
+        # cor para estrelados — fundo amarelo escuro + estrela dourada
+        self.github_tree.tag_configure("starred", background="#4a3f00", foreground="#FFD700")
+        self.github_tree.tag_configure("normal", background="", foreground="")
         self.github_tree.pack(fill=BOTH, expand=True, pady=5)
         self.github_tree.bind("<Button-1>", self._github_toggle_star)
         self.github_tree.bind("<Double-Button-1>", self._github_open)
@@ -1037,8 +1124,10 @@ class App(tb.Window):
     def _github_populate(self):
         for i in self.github_tree.get_children(): self.github_tree.delete(i)
         for r in self.github_repos:
-            star="⭐" if r["name"] in self.github_starred else "☆"
-            self.github_tree.insert("", "end", values=(star, r["name"], r["language"], r["stars"], r["description"][:80]), tags=(r["name"],))
+            is_starred = r["name"] in self.github_starred
+            star="★" if is_starred else "☆"
+            tags=(r["name"], "starred") if is_starred else (r["name"], "normal")
+            self.github_tree.insert("", "end", values=(star, r["name"], r["language"], r["stars"], r["description"][:80]), tags=tags)
     def _github_toggle_star(self, event):
         # identificar linha clicada
         try:
@@ -1268,7 +1357,7 @@ class App(tb.Window):
     def save_all(self,silent=False):
         self.curriculum["personal_info"]={"name":self.var_name.get().strip(),"email":self.var_email.get().strip(),"phone":self.var_phone.get().strip(),"location":self.var_location.get().strip(),"linkedin":self.var_linkedin.get().strip(),"github":self.var_github.get().strip()}
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
-        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_USER=self.var_github_user.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
+        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_USER=self.var_github_user.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
         cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get())}
         save_search_config(cfg); self.search_cfg=cfg

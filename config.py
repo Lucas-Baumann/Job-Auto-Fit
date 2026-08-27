@@ -17,13 +17,14 @@ class Config:
     CURRICULUM_PATH = BASE_DIR / "curriculum_base.json"
 
     # LLM / IA (gratuito ou pago — todos opcionais)
-    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()  # gemini|ollama|openai|claude|groq|custom
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()  # gemini|ollama|openai|claude|groq|openrouter|custom
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "")
     CUSTOM_LLM_KEY = os.getenv("CUSTOM_LLM_KEY", "")
 
