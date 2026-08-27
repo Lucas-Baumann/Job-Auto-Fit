@@ -19,6 +19,9 @@ __pycache__/
 *.pyo
 *.log
 
+# Testes locais
+tests/fix_log.txt
+
 # Playwright
 test-results/
 playwright/.cache/
