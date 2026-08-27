@@ -86,6 +86,13 @@ class App(tb.Window):
         super().__init__(themename="darkly")
         self.title("JobAutoFit — Automação Completa (Gupy / LinkedIn / ATS)")
         self.geometry("1280x820"); self.minsize(1200,750)
+        # centralizar na tela
+        self.update_idletasks()
+        try:
+            sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
+            x = (sw - 1280)//2; y = (sh - 820)//2 - 20
+            self.geometry(f"1280x820+{max(0,x)}+{max(0,y)}")
+        except: pass
         # ícone da janela (.ico)
         try:
             ico = BASE_DIR / "logo.ico"
@@ -612,6 +619,17 @@ class App(tb.Window):
         top = tb.Toplevel(self)
         top.title("Bem-vindo ao JobAutoFit")
         top.geometry("520x360")
+        # posicionar no canto superior direito do app
+        self.update_idletasks()
+        try:
+            ax = self.winfo_rootx(); ay = self.winfo_rooty(); aw = self.winfo_width()
+            wx = ax + aw - 540  # 520 + margem
+            wy = ay + 60
+            # garantir dentro da tela
+            sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
+            wx = max(0, min(wx, sw - 540)); wy = max(0, min(wy, sh - 380))
+            top.geometry(f"520x360+{wx}+{wy}")
+        except: pass
         top.transient(self)
         top.grab_set()
         tb.Label(top, text=" Bem-vindo! Vamos configurar em 4 passos:", font=("Segoe UI", 12, "bold")).pack(pady=12)
