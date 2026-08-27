@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -55,32 +56,34 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
         print("[Sender Gupy] Playwright não está instalado. Execute 'pip install playwright && playwright install'")
         return False
 
-    print(f"[Sender Gupy] Iniciando automacao do navegador para a vaga: {job_url}")
+    # modo seguro: delay randômico + aviso anti-ban
+    delay = random.uniform(2.5, 5.5)
+    print(f"[Sender Gupy] Iniciando automacao do navegador para a vaga: {job_url} (delay seguro {delay:.1f}s)")
+    print("[Aviso] Modo seguro ativo: ritmo humano, delays randômicos para evitar softban 999/429 (15min-24h). Mantenha limite diário ≤20.")
     try:
         with sync_playwright() as p:
-            # Lança o navegador visível (headful) para permitir acompanhamento e interações se necessário
-            browser = p.chromium.launch(headless=False, slow_mo=500)
+            browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(400,700)))
             context = browser.new_context()
             page = context.new_page()
-            
             page.goto(job_url, timeout=30000)
-            time.sleep(2)
-            
-            # Tentar clicar em 'Candidatar-se'
+            time.sleep(random.uniform(2.0, 4.0))
             apply_btn = page.query_selector("button:has-text('Candidatar-se'), a:has-text('Candidatar-se')")
             if apply_btn:
+                # movimento humano: hover antes do click
+                try: apply_btn.hover(); time.sleep(random.uniform(0.5,1.2))
+                except: pass
                 apply_btn.click()
-                time.sleep(2)
-                
-            # Fazer upload de curriculo se houver input de arquivo
+                time.sleep(random.uniform(1.5,3.0))
             file_input = page.query_selector("input[type='file']")
             if file_input and os.path.exists(pdf_path):
                 file_input.set_input_files(pdf_path)
                 print("[Sender Gupy] Curriculo otimizado em PDF anexado no formulario Gupy.")
-                time.sleep(3)
-                
+                time.sleep(random.uniform(2.0,4.0))
             print("[Sender Gupy] Formulario inicial preenchido. Finalizando sessão...")
+            time.sleep(random.uniform(1.0,2.0))
             browser.close()
+            # delay entre vagas
+            time.sleep(delay)
             return True
     except Exception as e:
         print(f"[Sender Gupy] Erro na automacao Gupy: {e}")
@@ -96,25 +99,27 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
         print("[Sender LinkedIn] Playwright não instalado.")
         return False
 
-    print(f"[Sender LinkedIn] Acessando vaga no LinkedIn: {job_url}")
+    delay = random.uniform(3.0, 6.0)
+    print(f"[Sender LinkedIn] Acessando vaga no LinkedIn: {job_url} (delay seguro {delay:.1f}s)")
+    print("[Aviso] LinkedIn Easy Apply com ritmo humano — limite diário ≤20 evita bloqueio 999/429.")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False, slow_mo=700)
+            browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(600,900)))
             context = browser.new_context()
             page = context.new_page()
-            
             page.goto(job_url, timeout=30000)
-            time.sleep(2)
-            
+            time.sleep(random.uniform(2.0,4.5))
             easy_apply_btn = page.query_selector("button.jobs-apply-button")
             if easy_apply_btn:
+                try: easy_apply_btn.hover(); time.sleep(random.uniform(0.7,1.5))
+                except: pass
                 print("[Sender LinkedIn] Botao Easy Apply encontrado! (Se o login for necessário, faça-o no navegador aberto).")
-                # Aqui o navegador permanece aberto brevemente para visualização
-                time.sleep(5)
+                time.sleep(random.uniform(3.0,6.0))
             else:
                 print("[Sender LinkedIn] Vaga redireciona para site externo ou requer login.")
-                
+            time.sleep(random.uniform(1.0,2.5))
             browser.close()
+            time.sleep(delay)
             return True
     except Exception as e:
         print(f"[Sender LinkedIn] Erro no fluxo LinkedIn: {e}")

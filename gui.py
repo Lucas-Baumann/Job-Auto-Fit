@@ -73,6 +73,13 @@ def load_search_config():
         except: pass
     return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"favorite_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"telegram_bot_token":"","telegram_chat_id":"","schedule_enabled":False,"schedule_hour":"08:00","enable_linkedin_posts":True,"linkedin_posts_limit":8}
 def save_search_config(c): SEARCH_CONFIG_PATH.write_text(json.dumps(c,ensure_ascii=False,indent=2),encoding="utf-8")
+PRESETS_PATH = BASE_DIR / "presets.json"
+def load_presets():
+    if PRESETS_PATH.exists():
+        try: return json.loads(PRESETS_PATH.read_text(encoding="utf-8"))
+        except: return {}
+    return {}
+def save_presets(d): PRESETS_PATH.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
 
 class App(tb.Window):
     def __init__(self):
@@ -137,6 +144,12 @@ class App(tb.Window):
         self.var_linkedin_posts_limit=tk.IntVar(value=self.search_cfg.get("linkedin_posts_limit", self.search_cfg.get("limit_per_source",8)))
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
+        # atalhos
+        self.bind("<Control-s>", lambda e: self.save_all())
+        self.bind("<Control-S>", lambda e: self.save_all())
+        self.bind("<F5>", lambda e: (self._refresh_dashboard(), self._refresh_hist()))
+        self.bind("<Escape>", lambda e: self.stop_automation())
+        self.after(600, self.show_wizard)
 
     def _build_ui(self):
         top=tb.Frame(self,padding=10); top.pack(fill=X)
@@ -152,12 +165,17 @@ class App(tb.Window):
         except Exception:
             pass
         tb.Label(top,text="JobAutoFit",font=("Segoe UI",18,"bold"),bootstyle="primary").pack(side=LEFT)
-        tb.Label(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",font=("Segoe UI",10),bootstyle="secondary").pack(side=LEFT,padx=10)
+        self.lbl_subtitle = tb.Label(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",font=("Segoe UI",10,"bold"),bootstyle="light")
+        self.lbl_subtitle.pack(side=LEFT,padx=10)
         # stepper visual
-        self.lbl_stepper = tb.Label(top, text="① Currículo → ② Busca → ③ IA → ④ Execução → ⑤ Dashboard", font=("Segoe UI", 8), bootstyle="secondary")
+        self.lbl_stepper = tb.Label(top, text="① Currículo → ② Busca → ③ IA → ④ Execução → ⑤ Dashboard", font=("Segoe UI", 8, "bold"), bootstyle="light")
         self.lbl_stepper.pack(side=LEFT, padx=12)
-        tb.Button(top,text="Exportar",bootstyle="secondary-outline",command=self.export_config).pack(side=RIGHT,padx=5)
-        tb.Button(top,text="Importar",bootstyle="secondary-outline",command=self.import_config).pack(side=RIGHT,padx=5)
+        self.btn_theme = tb.Button(top, text="☀ Claro", bootstyle="light-outline", width=8, command=self.toggle_theme)
+        self.btn_theme.pack(side=RIGHT, padx=5)
+        self.btn_export_top = tb.Button(top,text="Exportar",bootstyle="light-outline",command=self.export_config)
+        self.btn_export_top.pack(side=RIGHT,padx=5)
+        self.btn_import_top = tb.Button(top,text="Importar",bootstyle="light-outline",command=self.import_config)
+        self.btn_import_top.pack(side=RIGHT,padx=5)
         self.nb=tb.Notebook(self,bootstyle="dark"); self.nb.pack(fill=BOTH,expand=True,padx=10,pady=(0,10))
         self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10)
         self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico ")
@@ -177,7 +195,8 @@ class App(tb.Window):
         grid=tb.Frame(card); grid.pack(fill=X)
         for c in range(4): grid.columnconfigure(c,weight=1)
         tb.Label(grid,text="Nome completo").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_name).grid(row=0,column=1,sticky=EW,padx=5,pady=3,columnspan=3)
-        tb.Label(grid,text="E-mail").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
+        tb.Label(grid,text="E-mail").grid(row=1,column=0,sticky=W,padx=5,pady=3); self.ent_email = tb.Entry(grid,textvariable=self.var_email); self.ent_email.grid(row=1,column=1,sticky=EW,padx=5,pady=3)
+        self.var_email.trace_add("write", lambda *_: self._validate_email())
         tb.Label(grid,text="Telefone").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_phone).grid(row=1,column=3,sticky=EW,padx=5,pady=3)
         tb.Label(grid,text="Localização").grid(row=2,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_location).grid(row=2,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(grid,text="LinkedIn URL").grid(row=2,column=2,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_linkedin).grid(row=2,column=3,sticky=EW,padx=5,pady=3)
@@ -280,6 +299,72 @@ class App(tb.Window):
         sug = ", ".join(skills[:8])
         self.var_mandatory.set(sug)
         self._log(f"[Sugestão] Palavras obrigatórias preenchidas: {sug}")
+    def _refresh_presets_combo(self):
+        presets = load_presets()
+        self.combo_presets["values"] = list(presets.keys())
+    def save_preset(self):
+        name = self.var_preset_name.get().strip()
+        if not name:
+            messagebox.showwarning("Preset", "Digite um nome para o preset")
+            return
+        self.save_all(silent=True)
+        presets = load_presets()
+        presets[name] = self.search_cfg
+        save_presets(presets)
+        self._refresh_presets_combo()
+        self.show_toast(f"Preset '{name}' salvo")
+    def load_preset(self):
+        name = self.combo_presets.get().strip()
+        if not name:
+            messagebox.showwarning("Preset", "Selecione um preset")
+            return
+        presets = load_presets()
+        cfg = presets.get(name)
+        if not cfg:
+            messagebox.showerror("Preset", "Preset não encontrado")
+            return
+        # aplicar
+        self.var_keywords.set(", ".join(cfg.get("keywords", [])))
+        self.var_work_mode.set(cfg.get("work_mode", "remoto"))
+        self.var_presencial_loc.set(cfg.get("presencial_location", ""))
+        self.var_contract.set(cfg.get("contract_type", "indiferente"))
+        self.var_min_score.set(cfg.get("min_score", 60))
+        self.var_limit.set(cfg.get("limit_per_source", 8))
+        self.var_min_salary.set(cfg.get("min_salary", 0))
+        self.var_level.set(cfg.get("level", "indiferente"))
+        self.var_exclude.set(", ".join(cfg.get("exclude_keywords", [])))
+        self.var_mandatory.set(", ".join(cfg.get("mandatory_words", [])))
+        self.var_blocked.set(", ".join(cfg.get("blocked_companies", [])))
+        self.var_fav.set(", ".join(cfg.get("favorite_companies", [])))
+        self.var_max_age.set(cfg.get("max_age_days", 0))
+        self.var_only_pcd.set(cfg.get("only_pcd", False))
+        self.var_english.set(cfg.get("english_filter", "indiferente"))
+        self.var_daily_limit.set(cfg.get("daily_limit", 20))
+        self._bind_work_mode()
+        self._update_chips()
+        self.show_toast(f"Preset '{name}' carregado")
+    def delete_preset(self):
+        name = self.combo_presets.get().strip()
+        if not name:
+            return
+        presets = load_presets()
+        if name in presets:
+            del presets[name]
+            save_presets(presets)
+            self._refresh_presets_combo()
+            self.combo_presets.set("")
+            self.show_toast(f"Preset '{name}' excluído")
+    def _update_chips(self):
+        for w in self.frame_chips.winfo_children():
+            w.destroy()
+        kws = [k.strip() for k in self.var_keywords.get().split(",") if k.strip()]
+        for kw in kws[:10]:
+            btn = tb.Button(self.frame_chips, text=f"{kw} ✕", bootstyle="info-outline", width=12, command=lambda k=kw: self._remove_chip(k))
+            btn.pack(side=LEFT, padx=2, pady=2)
+            Tooltip(btn, f"Clique para remover '{kw}'")
+    def _remove_chip(self, kw):
+        kws = [k.strip() for k in self.var_keywords.get().split(",") if k.strip() and k.strip().lower() != kw.lower()]
+        self.var_keywords.set(", ".join(kws))
 
     # Busca avançada
     def _build_busca(self):
@@ -289,9 +374,24 @@ class App(tb.Window):
         sb.pack(side=RIGHT,fill=Y); canvas.pack(side=LEFT,fill=BOTH,expand=True)
         inner=tb.Frame(canvas); canvas.create_window((0,0),window=inner,anchor="nw")
         inner.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        # Presets
+        preset_frame = tb.Labelframe(inner, text="Presets de busca", padding=10, bootstyle="secondary")
+        preset_frame.pack(fill=X, pady=5)
+        self.var_preset_name = tk.StringVar()
+        self.combo_presets = tb.Combobox(preset_frame, state="readonly", width=28)
+        self.combo_presets.pack(side=LEFT, padx=5)
+        tb.Entry(preset_frame, textvariable=self.var_preset_name, width=22).pack(side=LEFT, padx=5)
+        info_icon(preset_frame, "Salve combinações: ex 'Python Remoto CLT 8k'\nCarrega todos os filtros de uma vez").pack(side=LEFT)
+        tb.Button(preset_frame, text="Salvar preset", bootstyle="success-outline", command=self.save_preset).pack(side=LEFT, padx=5)
+        tb.Button(preset_frame, text="Carregar", bootstyle="info-outline", command=self.load_preset).pack(side=LEFT, padx=2)
+        tb.Button(preset_frame, text="Excluir", bootstyle="danger-outline", command=self.delete_preset).pack(side=LEFT, padx=2)
+        self._refresh_presets_combo()
         card=tb.Labelframe(inner,text="Palavras-chave (vírgula)",padding=10,bootstyle="primary"); card.pack(fill=X,pady=5)
         tb.Entry(card,textvariable=self.var_keywords).pack(fill=X)
         tb.Label(card,text="Ex: Desenvolvedor Python, Backend, Django, FastAPI, AWS",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W,pady=(4,0))
+        self.frame_chips = tb.Frame(card); self.frame_chips.pack(fill=X, pady=4)
+        self.var_keywords.trace_add("write", lambda *_: self._update_chips())
+        self.after(300, self._update_chips)
         grid=tb.Frame(inner); grid.pack(fill=X,pady=5)
         grid.columnconfigure(1,weight=1); grid.columnconfigure(3,weight=1)
         tb.Label(grid,text="Regime").grid(row=0,column=0,sticky=W,padx=5,pady=4); cb=tb.Combobox(grid,textvariable=self.var_work_mode,values=["remoto","presencial","hibrido","indiferente"],state="readonly",width=16); cb.grid(row=0,column=1,sticky=W,padx=5,pady=4); cb.bind("<<ComboboxSelected>>",lambda e:self._bind_work_mode())
@@ -458,6 +558,79 @@ class App(tb.Window):
         tb.Label(g2,text="Gupy Email").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(g2,text="Senha").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
 
+    def show_toast(self, msg, duration=2500):
+        t = tb.Toplevel(self)
+        t.overrideredirect(True)
+        # posição canto inferior direito
+        t.geometry(f"320x50+{self.winfo_rootx()+self.winfo_width()-340}+{self.winfo_rooty()+self.winfo_height()-80}")
+        t.attributes("-topmost", True)
+        frm = tb.Frame(t, bootstyle="success", padding=10)
+        frm.pack(fill=BOTH, expand=True)
+        tb.Label(frm, text=msg, bootstyle="inverse-success").pack()
+        t.after(duration, t.destroy)
+
+    def toggle_theme(self):
+        cur = self.style.theme.name
+        new = "flatly" if cur == "darkly" else "darkly"
+        self.style.theme_use(new)
+        self.btn_theme.config(text="🌙 Escuro" if new=="flatly" else "☀ Claro")
+        # ajustar contraste do header conforme tema
+        if new == "flatly":
+            self.lbl_subtitle.config(bootstyle="secondary")
+            self.lbl_stepper.config(bootstyle="secondary")
+            self.btn_theme.config(bootstyle="secondary-outline")
+            self.btn_export_top.config(bootstyle="secondary-outline")
+            self.btn_import_top.config(bootstyle="secondary-outline")
+        else:
+            self.lbl_subtitle.config(bootstyle="light")
+            self.lbl_stepper.config(bootstyle="light")
+            self.btn_theme.config(bootstyle="light-outline")
+            self.btn_export_top.config(bootstyle="light-outline")
+            self.btn_import_top.config(bootstyle="light-outline")
+        self._update_stepper()
+        self.show_toast(f"Tema {new} ativado")
+
+    def _validate_email(self, *_):
+        import re
+        email = self.var_email.get().strip()
+        if not email:
+            try: self.ent_email.config(bootstyle="secondary")
+            except: pass
+            return
+        ok = re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) is not None
+        try:
+            self.ent_email.config(bootstyle="success" if ok else "danger")
+        except: pass
+        if hasattr(self, 'lbl_email_hint'):
+            self.lbl_email_hint.config(text="✓ válido" if ok else "✗ e-mail inválido — borda vermelha", bootstyle="success" if ok else "danger")
+
+    def show_wizard(self):
+        # só mostra na primeira vez
+        flag = BASE_DIR / ".wizard_done"
+        if flag.exists():
+            return
+        top = tb.Toplevel(self)
+        top.title("Bem-vindo ao JobAutoFit")
+        top.geometry("520x360")
+        top.transient(self)
+        top.grab_set()
+        tb.Label(top, text=" Bem-vindo! Vamos configurar em 4 passos:", font=("Segoe UI", 12, "bold")).pack(pady=12)
+        steps = [
+            "1. Aba Currículo → Importar PDF/DOCX ou preencher dados",
+            "2. Aba Busca & Filtros → definir palavras-chave e regime",
+            "3. Aba IA & Conexões → testar Gemini/Ollama (opcional)",
+            "4. Aba Execução → Iniciar Automação e ver relatório"
+        ]
+        for s in steps:
+            tb.Label(top, text=s, anchor=W).pack(fill=X, padx=20, pady=4)
+        tb.Label(top, text="Dica: passe o mouse no ⓘ para ajuda de cada campo.", font=("Segoe UI", 8), bootstyle="secondary").pack(pady=8)
+        def close():
+            flag.write_text("done")
+            top.destroy()
+            self.nb.select(self.tab_perfil)
+        tb.Button(top, text="Começar", bootstyle="success", command=close).pack(pady=12)
+        self.wait_window(top)
+
     def _update_stepper(self, *_):
         try:
             idx = self.nb.index(self.nb.select())
@@ -594,7 +767,10 @@ class App(tb.Window):
         self.lbl_today=tb.Label(self.dash_cards,text="0 hoje",font=("Segoe UI",12),bootstyle="info"); self.lbl_today.pack(side=LEFT,padx=10)
         # bars por status
         self.frame_bars=tb.Labelframe(f,text="Distribuição por status / plataforma",padding=10); self.frame_bars.pack(fill=BOTH,expand=True,pady=5)
-        self.bars_text=tk.Text(self.frame_bars,height=12,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9)); self.bars_text.pack(fill=BOTH,expand=True)
+        self.bars_text=tk.Text(self.frame_bars,height=6,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9)); self.bars_text.pack(fill=BOTH,expand=False)
+        # gráfico funil matplotlib
+        self.fig_frame = tb.Frame(self.frame_bars); self.fig_frame.pack(fill=BOTH, expand=True, pady=6)
+        tb.Label(self.frame_bars, text="Funil: coleta → filtro → match≥60 → enviado (gerado via filters + ATS)", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W)
     def _refresh_dashboard(self):
         try:
             if not DB_PATH.exists(): return
@@ -606,12 +782,40 @@ class App(tb.Window):
             self.lbl_total.config(text=f"{total} vagas totais"); self.lbl_high.config(text=f"{high} match≥60%"); self.lbl_today.config(text=f"{today} hoje")
             cur.execute("SELECT status, COUNT(*) c FROM jobs GROUP BY status"); rows=cur.fetchall()
             cur.execute("SELECT platform, COUNT(*) c FROM jobs GROUP BY platform"); rows2=cur.fetchall()
+            cur.execute("SELECT COUNT(*) c FROM jobs WHERE status IN ('applied','prepared')")
+            sent_row = cur.fetchone()
+            sent = sent_row["c"] if sent_row else 0
             con.close()
             txt=f"Por status:\n"
             for r in rows: txt+=f"  {r['status']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             txt+="\nPor plataforma:\n"
             for r in rows2: txt+=f"  {r['platform']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             self.bars_text.delete("1.0",tk.END); self.bars_text.insert("1.0",txt)
+            # matplotlib funil
+            try:
+                for w in self.fig_frame.winfo_children(): w.destroy()
+                import matplotlib
+                matplotlib.use("Agg")
+                from matplotlib.figure import Figure
+                from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+                # funil: total → high → enviados
+                stages = ["Coletadas", "Match ≥60%", "Enviadas"]
+                vals = [total or 0, high or 0, sent or 0]
+                fig = Figure(figsize=(6,2), dpi=100)
+                fig.patch.set_facecolor("#2b2b2b")
+                ax = fig.add_subplot(111)
+                ax.set_facecolor("#2b2b2b")
+                ax.bar(stages, vals, color=["#375a7f","#00bc8c","#f39c12"])
+                ax.tick_params(colors="white", labelsize=8)
+                for spine in ax.spines.values(): spine.set_color("white")
+                ax.set_title("Funil", color="white", fontsize=9)
+                for i, v in enumerate(vals): ax.text(i, v+0.3, str(v), ha="center", color="white", fontsize=8)
+                canvas = FigureCanvasTkAgg(fig, master=self.fig_frame)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill=BOTH, expand=True)
+            except Exception as e:
+                # fallback sem matplotlib
+                pass
         except Exception as e: pass
 
     # Histórico
@@ -619,28 +823,202 @@ class App(tb.Window):
         f=self.tab_hist
         top=tb.Frame(f); top.pack(fill=X,pady=5)
         tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga").pack(side=LEFT,padx=5)
+        tb.Button(top,text="Exportar CSV",bootstyle="success-outline",command=self._export_hist_csv).pack(side=RIGHT,padx=5)
+        tb.Button(top,text="Perguntas IA",bootstyle="warning-outline",command=self._hist_interview).pack(side=RIGHT,padx=5)
+        tb.Button(top,text="Diff ATS",bootstyle="info-outline",command=self._hist_diff).pack(side=RIGHT,padx=5)
         tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_hist).pack(side=RIGHT,padx=5)
+        # filtro
+        filt = tb.Frame(f); filt.pack(fill=X, pady=5)
+        tb.Label(filt, text="Filtro:").pack(side=LEFT, padx=5)
+        self.var_hist_filter = tk.StringVar()
+        ent = tb.Entry(filt, textvariable=self.var_hist_filter, width=40)
+        ent.pack(side=LEFT, padx=5, fill=X, expand=True)
+        ent.bind("<KeyRelease>", lambda e: self._refresh_hist())
+        info_icon(filt, "Filtra por vaga/empresa/status. Clique no cabeçalho para ordenar. Botão direito: menu").pack(side=LEFT, padx=5)
         cols=("vaga","empresa","local","match","status","plataforma")
         self.tree=tb.Treeview(f,columns=cols,show="headings",bootstyle="dark",height=14)
-        for c in cols: self.tree.heading(c,text=c.capitalize())
+        for c in cols:
+            self.tree.heading(c,text=c.capitalize(), command=lambda _c=c: self._sort_tree(_c, False))
         self.tree.column("vaga",width=260); self.tree.column("empresa",width=160); self.tree.column("local",width=140); self.tree.column("match",width=60,anchor=CENTER); self.tree.column("status",width=110,anchor=CENTER); self.tree.column("plataforma",width=90,anchor=CENTER)
-        self.tree.pack(fill=BOTH,expand=True,pady=5); self.tree.bind("<Double-Button-1>",self._on_hist_dbl); self._refresh_hist()
+        self.tree.pack(fill=BOTH,expand=True,pady=5)
+        self.tree.bind("<Double-Button-1>",self._on_hist_dbl)
+        # menu contexto
+        self.hist_menu = tk.Menu(self, tearoff=0)
+        self.hist_menu.add_command(label="Abrir vaga", command=self._hist_open)
+        self.hist_menu.add_command(label="Copiar link", command=self._hist_copy)
+        self.hist_menu.add_separator()
+        self.hist_menu.add_command(label="Diff ATS (original vs vaga)", command=self._hist_diff)
+        self.hist_menu.add_command(label="Gerar perguntas entrevista (IA)", command=self._hist_interview)
+        self.hist_menu.add_separator()
+        self.hist_menu.add_command(label="Excluir", command=self._hist_delete)
+        self.hist_menu.add_command(label="Adicionar nota", command=self._hist_note)
+        self.tree.bind("<Button-3>", self._show_hist_menu)
+        self._hist_sort_reverse = {}
+        self._refresh_hist()
     def _refresh_hist(self):
         try:
             for i in self.tree.get_children(): self.tree.delete(i)
             if not DB_PATH.exists(): return
             import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
-            cur.execute("SELECT title,company,location,match_score,status,platform FROM jobs ORDER BY id DESC LIMIT 300")
-            for r in cur.fetchall(): self.tree.insert("",tk.END,values=(r["title"],r["company"],r["location"],f"{r['match_score'] or 0}%",r["status"],r["platform"]))
+            cur.execute("SELECT title,company,location,match_score,status,platform,url FROM jobs ORDER BY id DESC LIMIT 500")
+            rows = cur.fetchall()
             con.close()
+            filt = self.var_hist_filter.get().lower().strip() if hasattr(self, 'var_hist_filter') else ""
+            for r in rows:
+                vals = (r["title"],r["company"],r["location"],f"{r['match_score'] or 0}%",r["status"],r["platform"])
+                if filt and filt not in " ".join([str(v).lower() for v in vals]):
+                    continue
+                self.tree.insert("",tk.END,values=vals, tags=(r["url"] or "",))
+        except Exception as e:
+            pass
+    def _sort_tree(self, col, reverse):
+        l = [(self.tree.set(k, col), k) for k in self.tree.get_children("")]
+        # tratar match %
+        try:
+            if col=="match":
+                l.sort(key=lambda x: int(x[0].replace("%","") or 0), reverse=reverse)
+            else:
+                l.sort(key=lambda x: x[0].lower(), reverse=reverse)
+        except:
+            l.sort(reverse=reverse)
+        for idx, (val, k) in enumerate(l):
+            self.tree.move(k, "", idx)
+        self.tree.heading(col, command=lambda: self._sort_tree(col, not reverse))
+    def _show_hist_menu(self, ev):
+        try:
+            iid = self.tree.identify_row(ev.y)
+            if iid:
+                self.tree.selection_set(iid)
+                self.hist_menu.post(ev.x_root, ev.y_root)
         except: pass
+    def _hist_open(self): self._on_hist_dbl(None)
+    def _hist_copy(self):
+        sel=self.tree.selection()
+        if not sel: return
+        url = self.tree.item(sel[0], "tags")
+        if url and url[0]:
+            self.clipboard_clear(); self.clipboard_append(url[0]); self.show_toast("Link copiado")
+    def _hist_delete(self):
+        sel=self.tree.selection()
+        if not sel or not messagebox.askyesno("Excluir", "Excluir vaga do histórico?"): return
+        try:
+            import sqlite3; con=sqlite3.connect(str(DB_PATH)); cur=con.cursor()
+            # pega url do item
+            url = self.tree.item(sel[0], "tags")
+            if url and url[0]:
+                cur.execute("DELETE FROM jobs WHERE url=?", (url[0],))
+                con.commit()
+            con.close()
+            self.tree.delete(sel[0])
+            self.show_toast("Excluído")
+            self._refresh_dashboard()
+        except Exception as e: messagebox.showerror("Erro", str(e))
+    def _hist_note(self):
+        sel=self.tree.selection()
+        if not sel: return
+        url = self.tree.item(sel[0], "tags")
+        if not url or not url[0]: return
+        # simples: armazena nota em arquivo .notes
+        from tkinter.simpledialog import askstring
+        note = askstring("Nota", "Anotação para esta vaga (ex: 'enviei por e-mail'):")
+        if note is not None:
+            # salva em arquivo lateral
+            notes_path = BASE_DIR / "job_notes.json"
+            notes = {}
+            if notes_path.exists():
+                try: notes = json.loads(notes_path.read_text(encoding="utf-8"))
+                except: notes={}
+            notes[url[0]] = note
+            notes_path.write_text(json.dumps(notes, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.show_toast("Nota salva")
+    def _hist_diff(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showwarning("Diff", "Selecione uma vaga"); return
+        url=self.tree.item(sel[0],"tags")
+        if not url or not url[0]: return
+        # buscar job no db
+        try:
+            import sqlite3
+            con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT description, title, company FROM jobs WHERE url=?", (url[0],))
+            row=cur.fetchone(); con.close()
+            if not row: return
+            desc=row["description"] or ""
+            # diff simples: skills do currículo vs palavras da vaga
+            skills=self.curriculum.get("skills",[])
+            found=[s for s in skills if s.lower() in desc.lower()]
+            missing=[s for s in skills if s.lower() not in desc.lower()]
+            top=tb.Toplevel(self); top.title(f"Diff ATS — {row['title']} @ {row['company']}"); top.geometry("700x500"); top.transient(self); top.grab_set()
+            tb.Label(top, text=f"Vaga: {row['title']} @ {row['company']}", font=("Segoe UI",10,"bold")).pack(pady=6, anchor=W, padx=10)
+            txt=tk.Text(top, wrap="word", bg="#1e1e1e", fg="#d0d0d0", font=("Consolas",9)); txt.pack(fill=BOTH, expand=True, padx=10, pady=5)
+            txt.insert("1.0", f"Resumo original:\n{self.curriculum.get('summary','')[:600]}\n\n--- SKILLS ENCONTRADAS NA VAGA ({len(found)}) ---\n" + ", ".join(found) + f"\n\n--- SKILLS NÃO ENCONTRADAS ({len(missing)}) ---\n" + ", ".join(missing) + f"\n\n--- DESCRIÇÃO (trecho) ---\n{desc[:1200]}")
+            txt.config(state=DISABLED)
+            tb.Button(top, text="Fechar", bootstyle="secondary", command=top.destroy).pack(pady=8)
+            # histórico PDFs: listar
+            pdfs = list((BASE_DIR/"output").glob("*.pdf"))
+            if pdfs: tb.Label(top, text=f"{len(pdfs)} PDFs em output/ — último: {sorted(pdfs, key=lambda x: x.stat().st_mtime)[-1].name}", font=("Segoe UI",8), bootstyle="secondary").pack()
+        except Exception as e: messagebox.showerror("Diff", str(e))
+    def _hist_interview(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showwarning("Entrevista", "Selecione uma vaga"); return
+        url=self.tree.item(sel[0],"tags")
+        if not url or not url[0]: return
+        # verificar IA
+        p=self.var_llm_provider.get()
+        has_key=bool(self.var_gemini_key.get().strip() or self.var_openai_key.get().strip() or self.var_claude_key.get().strip() or self.var_groq_key.get().strip() or self.var_custom_key.get().strip() or p=="ollama")
+        if not has_key and p=="gemini":
+            messagebox.showwarning("IA", "Configure uma chave de IA na aba 3 para gerar perguntas")
+            return
+        try:
+            import sqlite3
+            con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT description, title, company FROM jobs WHERE url=?", (url[0],))
+            row=cur.fetchone(); con.close()
+            if not row: return
+            from ats_optimizer import call_llm
+            prompt=f"Gere 8 perguntas de entrevista técnicas e comportamentais para a vaga '{row['title']}' na empresa '{row['company']}'. Descrição: {row['description'][:2000]}. Responda em português, numeradas, com dica curta de como responder."
+            ans=call_llm(prompt)
+            if not ans or "heurística" in ans.lower():
+                # fallback sem IA
+                ans="1. Fale sobre sua experiência com as tecnologias citadas na vaga.\n2. Como você resolveria um bug crítico em produção?\n3. Exemplo de projeto desafiador e aprendizado.\n4. Como trabalha em equipe remota?\n5. Como prioriza tarefas com prazo curto?\n(Configure IA para perguntas personalizadas)"
+            top=tb.Toplevel(self); top.title(f"Perguntas Entrevista — {row['title']}"); top.geometry("700x500"); top.transient(self); top.grab_set()
+            tb.Label(top, text=f"Perguntas para: {row['title']} @ {row['company']}", font=("Segoe UI",10,"bold")).pack(pady=6)
+            txt=tk.Text(top, wrap="word", bg="#1e1e1e", fg="#d0d0d0", font=("Segoe UI",10)); txt.pack(fill=BOTH, expand=True, padx=10, pady=5)
+            txt.insert("1.0", ans); txt.config(state=DISABLED)
+            tb.Button(top, text="Copiar", bootstyle="info-outline", command=lambda: (self.clipboard_clear(), self.clipboard_append(ans), self.show_toast("Copiado"))).pack(side=LEFT, padx=20, pady=8)
+            tb.Button(top, text="Fechar", bootstyle="secondary", command=top.destroy).pack(side=RIGHT, padx=20, pady=8)
+        except Exception as e: messagebox.showerror("Entrevista", str(e))
+    def _export_hist_csv(self):
+        try:
+            import csv, sqlite3
+            p=filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV","*.csv")], initialfile=f"historico_{datetime.now().strftime('%Y%m%d')}.csv")
+            if not p: return
+            con=sqlite3.connect(str(DB_PATH)); cur=con.cursor()
+            cur.execute("SELECT title,company,location,match_score,status,platform,url,created_at FROM jobs ORDER BY id DESC")
+            rows=cur.fetchall(); con.close()
+            with open(p,"w",newline="",encoding="utf-8") as f:
+                w=csv.writer(f); w.writerow(["vaga","empresa","local","match","status","plataforma","url","data"])
+                w.writerows(rows)
+            # webhook opcional
+            webhook=self.search_cfg.get("webhook_url","")
+            if webhook:
+                try:
+                    import requests; requests.post(webhook, json={"event":"export_csv","count":len(rows)}, timeout=5)
+                except: pass
+            self.show_toast(f"CSV exportado: {len(rows)} vagas")
+            self._open_folder(Path(p).parent)
+        except Exception as e: messagebox.showerror("Export", str(e))
     def _on_hist_dbl(self,ev):
         sel=self.tree.selection()
         if not sel: return
         try:
-            import sqlite3; con=sqlite3.connect(str(DB_PATH)); cur=con.cursor(); idx=self.tree.index(sel[0]); cur.execute("SELECT url FROM jobs ORDER BY id DESC LIMIT 1 OFFSET ?",(idx,)); row=cur.fetchone()
-            if row and row[0]: webbrowser.open(row[0])
-            con.close()
+            url = self.tree.item(sel[0], "tags")
+            if url and url[0]: webbrowser.open(url[0])
+            else:
+                # fallback antigo
+                import sqlite3; con=sqlite3.connect(str(DB_PATH)); cur=con.cursor(); idx=self.tree.index(sel[0]); cur.execute("SELECT url FROM jobs ORDER BY id DESC LIMIT 1 OFFSET ?",(idx,)); row=cur.fetchone()
+                if row and row[0]: webbrowser.open(row[0])
+                con.close()
         except: pass
 
     # Save/export
