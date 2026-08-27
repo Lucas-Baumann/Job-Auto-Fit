@@ -381,6 +381,17 @@ class App(tb.Window):
         sb.pack(side=RIGHT,fill=Y); canvas.pack(side=LEFT,fill=BOTH,expand=True)
         inner=tb.Frame(canvas); canvas.create_window((0,0),window=inner,anchor="nw")
         inner.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        # scroll com roda do mouse
+        def _on_mousewheel(event):
+            try: canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            except: pass
+        def _bind_mousewheel(_): canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        def _unbind_mousewheel(_): canvas.unbind_all("<MouseWheel>")
+        canvas.bind("<Enter>", _bind_mousewheel); canvas.bind("<Leave>", _unbind_mousewheel)
+        inner.bind("<Enter>", _bind_mousewheel); inner.bind("<Leave>", _unbind_mousewheel)
+        # Linux fallback
+        canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
         # Presets
         preset_frame = tb.Labelframe(inner, text="Presets de busca", padding=10, bootstyle="secondary")
         preset_frame.pack(fill=X, pady=5)
