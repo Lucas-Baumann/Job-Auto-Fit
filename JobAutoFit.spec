@@ -29,7 +29,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='JobAutoFit',
+    name='JobAutoFit_v2',
     icon='logo.ico',
     debug=False,
     bootloader_ignore_signals=False,
