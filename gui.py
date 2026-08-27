@@ -377,21 +377,33 @@ class App(tb.Window):
     def _build_busca(self):
         f=self.tab_busca
         # scroll
-        canvas=tk.Canvas(f,bg="#222222",highlightthickness=0); sb=tb.Scrollbar(f,orient=VERTICAL,command=canvas.yview); canvas.configure(yscrollcommand=sb.set)
+        # canvas com cor adaptativa ao tema
+        bg = "#222222" if self.style.theme.name=="darkly" else "#f8f9fa"
+        canvas=tk.Canvas(f,bg=bg,highlightthickness=0); sb=tb.Scrollbar(f,orient=VERTICAL,command=canvas.yview); canvas.configure(yscrollcommand=sb.set)
         sb.pack(side=RIGHT,fill=Y); canvas.pack(side=LEFT,fill=BOTH,expand=True)
         inner=tb.Frame(canvas); canvas.create_window((0,0),window=inner,anchor="nw")
         inner.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        # scroll com roda do mouse
+        # scroll com roda do mouse - robusto (funciona sobre qualquer child)
         def _on_mousewheel(event):
-            try: canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            # só rola se aba Busca estiver ativa
+            try:
+                if self.nb.index(self.nb.select()) != self.nb.index(self.tab_busca):
+                    return
+                if event.delta:
+                    canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+                elif event.num==4:
+                    canvas.yview_scroll(-1, "units")
+                elif event.num==5:
+                    canvas.yview_scroll(1, "units")
             except: pass
-        def _bind_mousewheel(_): canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        def _unbind_mousewheel(_): canvas.unbind_all("<MouseWheel>")
-        canvas.bind("<Enter>", _bind_mousewheel); canvas.bind("<Leave>", _unbind_mousewheel)
-        inner.bind("<Enter>", _bind_mousewheel); inner.bind("<Leave>", _unbind_mousewheel)
-        # Linux fallback
-        canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-        canvas.bind("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+        # bind global quando mouse entra na aba
+        def _bind_all(_): self.bind_all("<MouseWheel>", _on_mousewheel); self.bind_all("<Button-4>", _on_mousewheel); self.bind_all("<Button-5>", _on_mousewheel)
+        def _unbind_all(_): 
+            try: self.unbind_all("<MouseWheel>"); self.unbind_all("<Button-4>"); self.unbind_all("<Button-5>")
+            except: pass
+        f.bind("<Enter>", _bind_all); f.bind("<Leave>", _unbind_all)
+        # guardar para troca de tema
+        self._busca_canvas = canvas; self._busca_inner = inner
         # Presets
         preset_frame = tb.Labelframe(inner, text="Presets de busca", padding=10, bootstyle="secondary")
         preset_frame.pack(fill=X, pady=5)
@@ -605,6 +617,30 @@ class App(tb.Window):
             self.btn_theme.config(bootstyle="light-outline")
             self.btn_export_top.config(bootstyle="light-outline")
             self.btn_import_top.config(bootstyle="light-outline")
+        # atualizar fundos hard-coded para modo claro realista
+        try:
+            is_dark = new == "darkly"
+            bg_canvas = "#222222" if is_dark else "#ffffff"
+            bg_list = "#1e1e1e" if is_dark else "#ffffff"
+            fg_list = "white" if is_dark else "black"
+            bg_text = "#2b2b2b" if is_dark else "#ffffff"
+            fg_text = "#e0e0e0" if is_dark else "#212529"
+            if hasattr(self, '_busca_canvas'):
+                self._busca_canvas.config(bg=bg_canvas)
+            for attr in ["lst_skills","lst_exp","lst_edu","tree","bars_text","log_text","txt_summary"]:
+                if hasattr(self, attr):
+                    w = getattr(self, attr)
+                    try:
+                        # Treeview handle separately (ttk)
+                        if attr == "tree":
+                            # ttk Treeview theme já cuida, mas forçar
+                            pass
+                        elif isinstance(w, tk.Text):
+                            w.config(bg=bg_text, fg=fg_text, insertbackground=fg_text)
+                        elif isinstance(w, tk.Listbox):
+                            w.config(bg=bg_list, fg=fg_list)
+                    except: pass
+        except: pass
         self._update_stepper()
         self.show_toast(f"Tema {new} ativado")
 
