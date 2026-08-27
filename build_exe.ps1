@@ -12,6 +12,8 @@ $args = @(
     "--icon", "NONE",
     "--add-data", "curriculum_base.json;.",
     "--add-data", ".env.example;.",
+    "--add-data", "logo.ico;.",
+    "--icon", "logo.ico",
     "--hidden-import", "google.generativeai",
     "--hidden-import", "plyer",
     "--hidden-import", "pypdf",

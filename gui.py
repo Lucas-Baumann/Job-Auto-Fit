@@ -79,6 +79,13 @@ class App(tb.Window):
         super().__init__(themename="darkly")
         self.title("JobAutoFit — Automação Completa (Gupy / LinkedIn / ATS)")
         self.geometry("1280x820"); self.minsize(1200,750)
+        # ícone da janela (.ico)
+        try:
+            ico = BASE_DIR / "logo.ico"
+            if ico.exists():
+                self.iconbitmap(str(ico))
+        except Exception:
+            pass
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
         # vars perfil
         self.var_name=tk.StringVar(value=self.curriculum.get("personal_info",{}).get("name",""))
@@ -133,14 +140,30 @@ class App(tb.Window):
 
     def _build_ui(self):
         top=tb.Frame(self,padding=10); top.pack(fill=X)
+        # logo + título
+        try:
+            from PIL import Image, ImageTk
+            ico_path = BASE_DIR / "logo.ico"
+            if ico_path.exists():
+                img = Image.open(str(ico_path))
+                img = img.resize((36,36), Image.LANCZOS)
+                self.logo_img = ImageTk.PhotoImage(img)
+                tb.Label(top, image=self.logo_img).pack(side=LEFT, padx=(0,6))
+        except Exception:
+            pass
         tb.Label(top,text="JobAutoFit",font=("Segoe UI",18,"bold"),bootstyle="primary").pack(side=LEFT)
         tb.Label(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",font=("Segoe UI",10),bootstyle="secondary").pack(side=LEFT,padx=10)
+        # stepper visual
+        self.lbl_stepper = tb.Label(top, text="① Currículo → ② Busca → ③ IA → ④ Execução → ⑤ Dashboard", font=("Segoe UI", 8), bootstyle="secondary")
+        self.lbl_stepper.pack(side=LEFT, padx=12)
         tb.Button(top,text="Exportar",bootstyle="secondary-outline",command=self.export_config).pack(side=RIGHT,padx=5)
         tb.Button(top,text="Importar",bootstyle="secondary-outline",command=self.import_config).pack(side=RIGHT,padx=5)
         self.nb=tb.Notebook(self,bootstyle="dark"); self.nb.pack(fill=BOTH,expand=True,padx=10,pady=(0,10))
         self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10)
         self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico ")
         self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist()
+        self.nb.bind("<<NotebookTabChanged>>", lambda e: self._update_stepper())
+        self._update_stepper()
         bottom=tb.Frame(self,padding=(10,0,10,10)); bottom.pack(fill=X)
         tb.Button(bottom,text="Salvar Tudo",bootstyle="success",command=self.save_all).pack(side=LEFT)
         tb.Label(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",bootstyle="secondary",font=("Segoe UI",8)).pack(side=LEFT,padx=12)
@@ -434,6 +457,15 @@ class App(tb.Window):
         tb.Label(g2,text="Senha").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_pass,show="*").grid(row=0,column=3,sticky=EW,padx=5,pady=3)
         tb.Label(g2,text="Gupy Email").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(g2,text="Senha").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
+
+    def _update_stepper(self, *_):
+        try:
+            idx = self.nb.index(self.nb.select())
+            steps = ["① Currículo", "② Busca", "③ IA", "④ Execução", "⑤ Dashboard", "⑥ Histórico"]
+            txt = " → ".join([f"[{s}]" if i==idx else s for i,s in enumerate(steps)])
+            self.lbl_stepper.config(text=txt)
+        except Exception:
+            pass
 
     def _update_ai_state(self, *_):
         p = self.var_llm_provider.get()
