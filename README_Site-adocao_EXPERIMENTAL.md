@@ -21,7 +21,7 @@
 - ⚡ Vite + ESLint + Prettier
 
 ## 📸 Demo
-> Adicione `docs/screenshot.png` ou GIF
+> <!-- Vazio — sem imagem quebrada. Me envie foto do site e eu adiciono: ![Screenshot](docs/screenshot.png) -->
 
 ## 🚀 Como rodar
 ```bash
