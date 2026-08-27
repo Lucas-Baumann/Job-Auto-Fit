@@ -608,7 +608,39 @@ class App(tb.Window):
     # IA
     def _build_ia(self):
         f=self.tab_ia
-        card=tb.Labelframe(f,text="Provedor IA — campo OPCIONAL (selecione 1)",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
+        # scroll container para não cortar SMTP/LinkedIn
+        bg = "#2b2b2b" if self.style.theme.name=="darkly" else "#ffffff"
+        container = tb.Frame(f)
+        container.pack(fill=BOTH, expand=True)
+        canvas = tk.Canvas(container, bg=bg, highlightthickness=0)
+        sb = tb.Scrollbar(container, orient=VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y)
+        canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        inner = tb.Frame(canvas)
+        win_id = canvas.create_window((0,0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+        canvas.configure(takefocus=True)
+        def _on_mousewheel(event):
+            try:
+                if self.nb.index(self.nb.select()) != self.nb.index(self.tab_ia):
+                    return "break"
+                delta = int(-1*(event.delta/120)) if event.delta else (-3 if event.num==4 else 3)
+                if delta: canvas.yview_scroll(delta, "units")
+                return "break"
+            except: pass
+        def _bind_all(_): self.bind_all("<MouseWheel>", _on_mousewheel); self.bind_all("<Button-4>", _on_mousewheel); self.bind_all("<Button-5>", _on_mousewheel)
+        def _unbind_all(_): 
+            try: self.unbind_all("<MouseWheel>"); self.unbind_all("<Button-4>"); self.unbind_all("<Button-5>")
+            except: pass
+        f.bind("<Enter>", _bind_all); f.bind("<Leave>", _unbind_all)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            canvas.bind(seq, _on_mousewheel, add="+")
+            inner.bind(seq, _on_mousewheel, add="+")
+        self._ia_canvas = canvas; self._ia_inner = inner
+        # card provedor
+        card=tb.Labelframe(inner,text="Provedor IA — campo OPCIONAL (selecione 1)",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
         row=tb.Frame(card); row.pack(fill=X)
         tb.Label(row,text="Provedor").pack(side=LEFT,padx=5)
         self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","openrouter","ollama","openai","claude","groq","custom"],state="readonly",width=14); self.combo_llm.pack(side=LEFT,padx=5)
@@ -624,6 +656,23 @@ class App(tb.Window):
             try: v.trace_add("write", lambda *_: self._update_ai_state())
             except: pass
         self.after(300, lambda: (self._rebuild_ia_fields(), self._update_ai_state()))
+        # SMTP
+        card2=tb.Labelframe(inner,text="E-mail SMTP (envio automático, opcional)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
+        hdr2=tb.Frame(card2); hdr2.pack(fill=X); tb.Label(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr2, "SMTP = protocolo de envio de e-mail.\nGmail: smtp.gmail.com:587 + Senha de App (myaccount.google.com > Segurança > Senhas de app).\nOutlook: smtp.office365.com:587\nSe deixar vazio, o sistema só gera PDFs e relatório (não envia).").pack(side=LEFT,padx=4)
+        g=tb.Frame(card2); g.pack(fill=X, pady=(6,0)); g.columnconfigure(1,weight=1); g.columnconfigure(3,weight=1)
+        tb.Label(g,text="Host").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_host).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
+        tb.Label(g,text="Porta").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_port,width=8).grid(row=0,column=3,sticky=W,padx=5,pady=3)
+        tb.Label(g,text="Usuário").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_user).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
+        tb.Label(g,text="Senha / App Pass").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
+        tb.Label(card2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W, pady=(4,0))
+        # LinkedIn/Gupy
+        card3=tb.Labelframe(inner,text="LinkedIn / Gupy (automação navegador, opcional)",padding=10,bootstyle="warning"); card3.pack(fill=X,pady=5)
+        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Playwright preenche formulários com ritmo humano; CAPTCHA/teste pausa para você",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr3, "Automação de navegador real (Playwright).\nLinkedIn Easy Apply e Gupy: abre Chromium visível, clica em Candidatar-se e anexa PDF.\nPrecisa login. Deixe vazio para modo manual (só relatório).").pack(side=LEFT,padx=4)
+        g2=tb.Frame(card3); g2.pack(fill=X); g2.columnconfigure(1,weight=1); g2.columnconfigure(3,weight=1)
+        tb.Label(g2,text="LinkedIn Email").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_email).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
+        tb.Label(g2,text="Senha").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_pass,show="*").grid(row=0,column=3,sticky=EW,padx=5,pady=3)
+        tb.Label(g2,text="Gupy Email").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
+        tb.Label(g2,text="Senha").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
 
     def _rebuild_ia_fields(self):
         # limpa e recria apenas o campo do provedor selecionado
@@ -677,21 +726,6 @@ class App(tb.Window):
             if not hasattr(self, attr):
                 try: setattr(self, attr, tb.Entry(self.frame_ia_dynamic))
                 except: pass
-        card2=tb.Labelframe(f,text="E-mail SMTP (envio automático, opcional)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
-        hdr2=tb.Frame(card2); hdr2.pack(fill=X); tb.Label(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr2, "SMTP = protocolo de envio de e-mail.\nGmail: smtp.gmail.com:587 + Senha de App (myaccount.google.com > Segurança > Senhas de app).\nOutlook: smtp.office365.com:587\nSe deixar vazio, o sistema só gera PDFs e relatório (não envia).").pack(side=LEFT,padx=4)
-        g=tb.Frame(card2); g.pack(fill=X, pady=(6,0)); g.columnconfigure(1,weight=1); g.columnconfigure(3,weight=1)
-        tb.Label(g,text="Host").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_host).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g,text="Porta").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_port,width=8).grid(row=0,column=3,sticky=W,padx=5,pady=3)
-        tb.Label(g,text="Usuário").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_user).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g,text="Senha / App Pass").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(card2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W, pady=(4,0))
-        card3=tb.Labelframe(f,text="LinkedIn / Gupy (automação navegador, opcional)",padding=10,bootstyle="warning"); card3.pack(fill=X,pady=5)
-        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Playwright preenche formulários com ritmo humano; CAPTCHA/teste pausa para você",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr3, "Automação de navegador real (Playwright).\nLinkedIn Easy Apply e Gupy: abre Chromium visível, clica em Candidatar-se e anexa PDF.\nPrecisa login. Deixe vazio para modo manual (só relatório).").pack(side=LEFT,padx=4)
-        g2=tb.Frame(card3); g2.pack(fill=X); g2.columnconfigure(1,weight=1); g2.columnconfigure(3,weight=1)
-        tb.Label(g2,text="LinkedIn Email").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_email).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Senha").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_pass,show="*").grid(row=0,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Gupy Email").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Senha").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
 
     def show_toast(self, msg, duration=2500):
         t = tb.Toplevel(self)
@@ -1068,7 +1102,7 @@ class App(tb.Window):
         top=tb.Frame(f); top.pack(fill=X, pady=5)
         tb.Label(top, text="GitHub User:").pack(side=LEFT, padx=5)
         tb.Entry(top, textvariable=self.var_github_user, width=20).pack(side=LEFT, padx=5)
-        info_icon(top, "Seu username do GitHub (ex: Lucas-Baumann)\nUsado para buscar repos públicos").pack(side=LEFT)
+        info_icon(top, "Seu username do GitHub (ex: seu-usuario)\nUsado para buscar repos públicos").pack(side=LEFT)
         tb.Label(top, text="Token (opcional):").pack(side=LEFT, padx=(15,5))
         tb.Entry(top, textvariable=self.var_github_token, show="*", width=22).pack(side=LEFT, padx=5)
         info_icon(top, "Token aumenta limite de 60→5000 req/h e vê privados.\nGere em github.com/settings/tokens (sem escopo para públicos)").pack(side=LEFT)
