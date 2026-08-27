@@ -376,32 +376,82 @@ class App(tb.Window):
     # Busca avançada
     def _build_busca(self):
         f=self.tab_busca
-        # scroll
-        # canvas com cor adaptativa ao tema
+        # scroll - ScrollableFrame robusto
         bg = "#222222" if self.style.theme.name=="darkly" else "#f8f9fa"
-        canvas=tk.Canvas(f,bg=bg,highlightthickness=0); sb=tb.Scrollbar(f,orient=VERTICAL,command=canvas.yview); canvas.configure(yscrollcommand=sb.set)
-        sb.pack(side=RIGHT,fill=Y); canvas.pack(side=LEFT,fill=BOTH,expand=True)
-        inner=tb.Frame(canvas); canvas.create_window((0,0),window=inner,anchor="nw")
-        inner.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        # scroll com roda do mouse - robusto (funciona sobre qualquer child)
+        container = tb.Frame(f)
+        container.pack(fill=BOTH, expand=True)
+        canvas=tk.Canvas(container,bg=bg,highlightthickness=0, highlightbackground=bg)
+        sb=tb.Scrollbar(container,orient=VERTICAL,command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT,fill=Y)
+        canvas.pack(side=LEFT,fill=BOTH,expand=True)
+        inner=tb.Frame(canvas)
+        win_id = canvas.create_window((0,0),window=inner,anchor="nw")
+        def _on_inner_config(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # inner sempre com mesma largura do canvas
+            try: canvas.itemconfig(win_id, width=canvas.winfo_width())
+            except: pass
+        inner.bind("<Configure>", _on_inner_config)
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+        # tornar canvas focável para setas/espaço
+        canvas.configure(takefocus=True)
+        canvas.bind("<Enter>", lambda e: canvas.focus_set())
+        # scroll handlers
         def _on_mousewheel(event):
-            # só rola se aba Busca estiver ativa
             try:
                 if self.nb.index(self.nb.select()) != self.nb.index(self.tab_busca):
-                    return
+                    return "break"
+                delta = 0
                 if event.delta:
-                    canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+                    delta = int(-1*(event.delta/120))
                 elif event.num==4:
-                    canvas.yview_scroll(-1, "units")
+                    delta = -3
                 elif event.num==5:
-                    canvas.yview_scroll(1, "units")
+                    delta = 3
+                if delta:
+                    canvas.yview_scroll(delta, "units")
+                return "break"
             except: pass
-        # bind global quando mouse entra na aba
-        def _bind_all(_): self.bind_all("<MouseWheel>", _on_mousewheel); self.bind_all("<Button-4>", _on_mousewheel); self.bind_all("<Button-5>", _on_mousewheel)
-        def _unbind_all(_): 
-            try: self.unbind_all("<MouseWheel>"); self.unbind_all("<Button-4>"); self.unbind_all("<Button-5>")
+        def _on_keys(event):
+            if self.nb.index(self.nb.select()) != self.nb.index(self.tab_busca):
+                return
+            if event.keysym in ("Down", "Next", "space"):
+                canvas.yview_scroll(3, "units"); return "break"
+            elif event.keysym in ("Up", "Prior"):
+                canvas.yview_scroll(-3, "units"); return "break"
+        # bind em todos os níveis - recursivo + global fallback
+        def _bind_all(_):
+            self.bind_all("<MouseWheel>", _on_mousewheel, add="+")
+            self.bind_all("<Button-4>", _on_mousewheel, add="+")
+            self.bind_all("<Button-5>", _on_mousewheel, add="+")
+            canvas.bind_all("<Up>", _on_keys, add="+")
+            canvas.bind_all("<Down>", _on_keys, add="+")
+            canvas.bind_all("<Prior>", _on_keys, add="+")
+            canvas.bind_all("<Next>", _on_keys, add="+")
+            canvas.bind_all("<space>", _on_keys, add="+")
+        def _unbind_all(_):
+            try:
+                self.unbind_all("<MouseWheel>"); self.unbind_all("<Button-4>"); self.unbind_all("<Button-5>")
+                canvas.unbind_all("<Up>"); canvas.unbind_all("<Down>"); canvas.unbind_all("<Prior>"); canvas.unbind_all("<Next>"); canvas.unbind_all("<space>")
             except: pass
-        f.bind("<Enter>", _bind_all); f.bind("<Leave>", _unbind_all)
+        f.bind("<Enter>", _bind_all)
+        f.bind("<Leave>", _unbind_all)
+        # também bind direto no canvas/inner para garantir
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            canvas.bind(seq, _on_mousewheel, add="+")
+            inner.bind(seq, _on_mousewheel, add="+")
+        # bind recursivo em todos os children futuros (após criar)
+        def _bind_recursive(widget):
+            for child in widget.winfo_children():
+                try:
+                    child.bind("<MouseWheel>", _on_mousewheel, add="+")
+                    child.bind("<Button-4>", _on_mousewheel, add="+")
+                    child.bind("<Button-5>", _on_mousewheel, add="+")
+                    _bind_recursive(child)
+                except: pass
+        self.after(500, lambda: _bind_recursive(inner))
+        self.after(800, lambda: canvas.configure(scrollregion=canvas.bbox("all")))
         # guardar para troca de tema
         self._busca_canvas = canvas; self._busca_inner = inner
         # Presets
