@@ -17,10 +17,10 @@ Tornar o **GitHub tão atrativo quanto o currículo** para a vaga. Recrutador av
 - **GUI nova aba 7. GitHub/Portfólio** — campo username (auto do currículo), token opcional, botão `Buscar Repos` → lista com ⭐ clicável, botão `Gerar READMEs para estrelados` → salva em `output_github/README_<repo>.md`
 
 ## Como usar (GUI)
-1. Aba GitHub/Portfólio → `Usuário: Lucas-Baumann` → `Buscar Repos` (lista com ★, linguagem, estrelas)
+1. Aba GitHub/Portfólio → `Usuário: SEU_USUARIO` → `Buscar Repos` (lista com ★, linguagem, estrelas)
 2. Clique na linha para alternar ⭐ (amarelo = selecionado)
 3. `Gerar READMEs para estrelados` → drafts em `output_github/` (sem imagem, comentado `<!-- ![Demo](docs/demo.gif) -->` — me envie fotos e eu adiciono)
-4. Para perfil: `Gerar README Perfil` → `PROFILE_README_EXPERIMENTAL.md` → copiar para `Lucas-Baumann/Lucas-Baumann`
+4. Para perfil: `Gerar README Perfil` → `PROFILE_README_EXPERIMENTAL.md` → copiar para `SEU_USUARIO/SEU_USUARIO` (se existir repo de perfil)
 
 ## Estrela ⭐
 - Usuário estrala os repos que **quer** reestruturar (persistido em `github_selection.json`)
