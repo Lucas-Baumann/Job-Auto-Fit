@@ -149,6 +149,15 @@ class App(tb.Window):
         self.var_schedule_hour=tk.StringVar(value=self.search_cfg.get("schedule_hour","08:00"))
         self.var_enable_linkedin_posts=tk.BooleanVar(value=self.search_cfg.get("enable_linkedin_posts",True))
         self.var_linkedin_posts_limit=tk.IntVar(value=self.search_cfg.get("linkedin_posts_limit", self.search_cfg.get("limit_per_source",8)))
+        self.var_github_user = tk.StringVar(value=(self.curriculum.get("personal_info",{}).get("github","").split("/")[-1].strip() if self.curriculum.get("personal_info",{}).get("github") else self.env.get("GITHUB_USER","Lucas-Baumann") or "Lucas-Baumann"))
+        self.var_github_token = tk.StringVar(value=self.env.get("GITHUB_TOKEN",""))
+        self.github_repos = []
+        self.github_starred = set()
+        try:
+            sel_path = BASE_DIR / "github_selection.json"
+            if sel_path.exists():
+                self.github_starred = set(json.loads(sel_path.read_text(encoding="utf-8")))
+        except: pass
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
         # atalhos
@@ -184,9 +193,9 @@ class App(tb.Window):
         self.btn_import_top = tb.Button(top,text="Importar",bootstyle="light-outline",command=self.import_config)
         self.btn_import_top.pack(side=RIGHT,padx=5)
         self.nb=tb.Notebook(self,bootstyle="dark"); self.nb.pack(fill=BOTH,expand=True,padx=10,pady=(0,10))
-        self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10)
-        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico ")
-        self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist()
+        self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10); self.tab_github=tb.Frame(self.nb,padding=10)
+        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico "); self.nb.add(self.tab_github,text=" 7. GitHub ⭐ ")
+        self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist(); self._build_github()
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self._update_stepper())
         self._update_stepper()
         bottom=tb.Frame(self,padding=(10,0,10,10)); bottom.pack(fill=X)
@@ -749,7 +758,7 @@ class App(tb.Window):
     def _update_stepper(self, *_):
         try:
             idx = self.nb.index(self.nb.select())
-            steps = ["① Currículo", "② Busca", "③ IA", "④ Execução", "⑤ Dashboard", "⑥ Histórico"]
+            steps = ["① Currículo", "② Busca", "③ IA", "④ Execução", "⑤ Dashboard", "⑥ Histórico", "⑦ GitHub"]
             txt = " → ".join([f"[{s}]" if i==idx else s for i,s in enumerate(steps)])
             self.lbl_stepper.config(text=txt)
         except Exception:
@@ -970,6 +979,125 @@ class App(tb.Window):
         self.tree.bind("<Button-3>", self._show_hist_menu)
         self._hist_sort_reverse = {}
         self._refresh_hist()
+    def _build_github(self):
+        f=self.tab_github
+        top=tb.Frame(f); top.pack(fill=X, pady=5)
+        tb.Label(top, text="GitHub User:").pack(side=LEFT, padx=5)
+        tb.Entry(top, textvariable=self.var_github_user, width=20).pack(side=LEFT, padx=5)
+        info_icon(top, "Seu username do GitHub (ex: Lucas-Baumann)\nUsado para buscar repos públicos").pack(side=LEFT)
+        tb.Label(top, text="Token (opcional):").pack(side=LEFT, padx=(15,5))
+        tb.Entry(top, textvariable=self.var_github_token, show="*", width=22).pack(side=LEFT, padx=5)
+        info_icon(top, "Token aumenta limite de 60→5000 req/h e vê privados.\nGere em github.com/settings/tokens (sem escopo para públicos)").pack(side=LEFT)
+        tb.Button(top, text="Buscar Repos", bootstyle="info", command=self._github_fetch).pack(side=LEFT, padx=8)
+        tb.Label(f, text="Clique na estrela ⭐ para marcar os repos que quer reestruturar o README. Depois clique em Gerar.", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=4)
+        cols=("star","repo","lang","stars","desc")
+        self.github_tree=tb.Treeview(f, columns=cols, show="headings", bootstyle="dark", height=14)
+        self.github_tree.heading("star", text="⭐"); self.github_tree.heading("repo", text="Repositório"); self.github_tree.heading("lang", text="Lang"); self.github_tree.heading("stars", text="★"); self.github_tree.heading("desc", text="Descrição")
+        self.github_tree.column("star", width=40, anchor=CENTER); self.github_tree.column("repo", width=200); self.github_tree.column("lang", width=90, anchor=CENTER); self.github_tree.column("stars", width=50, anchor=CENTER); self.github_tree.column("desc", width=400)
+        self.github_tree.pack(fill=BOTH, expand=True, pady=5)
+        self.github_tree.bind("<Button-1>", self._github_toggle_star)
+        self.github_tree.bind("<Double-Button-1>", self._github_open)
+        # menu
+        self.github_menu=tk.Menu(self, tearoff=0)
+        self.github_menu.add_command(label="Abrir no GitHub", command=self._github_open)
+        self.github_menu.add_command(label="Alternar ⭐", command=lambda: self._github_toggle_star(None))
+        self.github_tree.bind("<Button-3>", lambda e: self.github_menu.post(e.x_root, e.y_root))
+        btns=tb.Frame(f); btns.pack(fill=X, pady=5)
+        tb.Button(btns, text="Gerar READMEs para ⭐ estrelados", bootstyle="success", command=self._github_generate).pack(side=LEFT, padx=5)
+        tb.Button(btns, text="Preview README Perfil", bootstyle="info-outline", command=self._github_preview_profile).pack(side=LEFT, padx=5)
+        tb.Button(btns, text="Abrir pasta output_github", bootstyle="secondary", command=lambda: self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT, padx=5)
+        tb.Label(btns, text="Selecione com ⭐ e gere drafts em output_github/ para revisar antes do push", font=("Segoe UI",8), bootstyle="secondary").pack(side=LEFT, padx=10)
+        # carregar se já tiver repos em cache? tentar fetch silencioso se já tiver seleção
+        if self.github_starred:
+            self.after(800, lambda: self._github_fetch(silent=True))
+
+    def _github_fetch(self, silent=False):
+        user=self.var_github_user.get().strip()
+        if not user:
+            if not silent: messagebox.showwarning("GitHub", "Informe o username")
+            return
+        try:
+            from github_optimizer import fetch_repos
+            token=self.var_github_token.get().strip()
+            self._log_hist = getattr(self, "_log", lambda x: None)
+            # usar thread para não travar
+            def do_fetch():
+                try:
+                    repos=fetch_repos(user, token)
+                    self.github_repos=repos
+                    self.after(0, lambda: self._github_populate())
+                    if not silent:
+                        self.after(0, lambda: self.show_toast(f"{len(repos)} repos encontrados"))
+                except Exception as e:
+                    if not silent:
+                        self.after(0, lambda: messagebox.showerror("GitHub", str(e)))
+            import threading; threading.Thread(target=do_fetch, daemon=True).start()
+        except Exception as e:
+            if not silent: messagebox.showerror("GitHub", str(e))
+    def _github_populate(self):
+        for i in self.github_tree.get_children(): self.github_tree.delete(i)
+        for r in self.github_repos:
+            star="⭐" if r["name"] in self.github_starred else "☆"
+            self.github_tree.insert("", "end", values=(star, r["name"], r["language"], r["stars"], r["description"][:80]), tags=(r["name"],))
+    def _github_toggle_star(self, event):
+        # identificar linha clicada
+        try:
+            # se clicou no cabeçalho, ignora
+            region=self.github_tree.identify("region", event.x, event.y) if event else "cell"
+            if region=="heading": return
+            iid=self.github_tree.identify_row(event.y) if event else (self.github_tree.selection()[0] if self.github_tree.selection() else None)
+            if not iid: return
+            # coluna star?
+            col=self.github_tree.identify_column(event.x) if event else "#1"
+            # alternar estrela para a linha
+            vals=self.github_tree.item(iid, "values")
+            repo_name=self.github_tree.item(iid, "tags")[0] if self.github_tree.item(iid, "tags") else vals[1]
+            if repo_name in self.github_starred:
+                self.github_starred.remove(repo_name)
+            else:
+                self.github_starred.add(repo_name)
+            # salvar
+            try: (BASE_DIR/"github_selection.json").write_text(json.dumps(sorted(list(self.github_starred)), ensure_ascii=False, indent=2), encoding="utf-8")
+            except: pass
+            self._github_populate()
+            # manter seleção
+            for child in self.github_tree.get_children():
+                if self.github_tree.item(child, "tags")[0]==repo_name:
+                    self.github_tree.selection_set(child)
+                    break
+        except: pass
+    def _github_open(self, event=None):
+        sel=self.github_tree.selection()
+        if not sel: return
+        repo=self.github_tree.item(sel[0], "tags")[0]
+        webbrowser.open(f"https://github.com/{self.var_github_user.get().strip()}/{repo}")
+    def _github_generate(self):
+        if not self.github_starred:
+            messagebox.showwarning("GitHub", "Selecione com ⭐ pelo menos 1 repo")
+            return
+        try:
+            from github_optimizer import save_drafts
+            import pathlib
+            # filtrar repos estrelados
+            selected=[r for r in self.github_repos if r["name"] in self.github_starred]
+            if not selected:
+                # se não tem cache, buscar das estreladas via nome
+                selected=[{"name":n, "full_name":f"{self.var_github_user.get().strip()}/{n}", "html_url":f"https://github.com/{self.var_github_user.get().strip()}/{n}", "description":"", "language":"", "stars":0} for n in self.github_starred]
+            out_dir=BASE_DIR/"output_github"
+            # garantir curriculum atualizado
+            self.save_all(silent=True)
+            cur=self.curriculum
+            files=save_drafts(selected, out_dir, cur)
+            messagebox.showinfo("GitHub", f"{len(files)} READMEs gerados em output_github/\nRevise antes de copiar para cada repo.")
+            self._open_folder(out_dir)
+            self.show_toast(f"{len(files)} READMEs gerados")
+        except Exception as e: messagebox.showerror("GitHub", str(e))
+    def _github_preview_profile(self):
+        try:
+            p=BASE_DIR/"PROFILE_README_EXPERIMENTAL.md"
+            if p.exists(): webbrowser.open(p.as_uri())
+            else: messagebox.showinfo("Preview", "PROFILE_README_EXPERIMENTAL.md não encontrado — gere via módulo GitHub primeiro")
+        except Exception as e: messagebox.showerror("Preview", str(e))
     def _refresh_hist(self):
         try:
             for i in self.tree.get_children(): self.tree.delete(i)
@@ -1140,7 +1268,7 @@ class App(tb.Window):
     def save_all(self,silent=False):
         self.curriculum["personal_info"]={"name":self.var_name.get().strip(),"email":self.var_email.get().strip(),"phone":self.var_phone.get().strip(),"location":self.var_location.get().strip(),"linkedin":self.var_linkedin.get().strip(),"github":self.var_github.get().strip()}
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
-        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
+        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_USER=self.var_github_user.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
         cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get())}
         save_search_config(cfg); self.search_cfg=cfg

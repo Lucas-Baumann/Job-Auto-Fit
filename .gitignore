@@ -3,9 +3,14 @@
 *.db
 *.sqlite
 search_config.json
+github_selection.json
+.wizard_done
+presets.json
 
 # Gerados
 output/
+output_github/
+output_github_test/
 reports/
 dist/
 build/
