@@ -471,6 +471,9 @@ class App(tb.Window):
         self.after(800, lambda: canvas.configure(scrollregion=canvas.bbox("all")))
         # guardar para troca de tema
         self._busca_canvas = canvas; self._busca_inner = inner
+        # nota informativa: SMTP e Credenciais estão abaixo — role para ver
+        info_box = tb.Labelframe(inner, text="Dica: role para baixo para ver SMTP e LinkedIn/Gupy", padding=6, bootstyle="secondary"); info_box.pack(fill=X, pady=4)
+        tb.Label(info_box, text="A aba IA (dinâmica) mostra só o campo do provedor selecionado. SMTP e automação Playwright estão sempre visíveis abaixo no scroll. Se usar 'gemini' sem chave, o sistema usa heurístico (não quebra). Se usar 'openrouter', use chave gratuita de openrouter.ai/keys.", font=("Segoe UI",8), bootstyle="secondary", wraplength=1000).pack(anchor=W)
         # Presets
         preset_frame = tb.Labelframe(inner, text="Presets de busca", padding=10, bootstyle="secondary")
         preset_frame.pack(fill=X, pady=5)
