@@ -10,6 +10,20 @@ from reportlab.lib import colors
 
 from config import Config
 
+SKILLS_IA_DIR = Config.BASE_DIR / "skills_ia"
+
+def load_skills_context() -> str:
+    """Carrega todos os arquivos .md de skills_ia como contexto para a IA."""
+    if not SKILLS_IA_DIR.exists():
+        return ""
+    parts = []
+    for f in sorted(SKILLS_IA_DIR.glob("*.md")):
+        content = f.read_text(encoding="utf-8", errors="ignore")
+        # extrai nome e conteúdo, pulando frontmatter YAML se houver
+        clean = content.split("---", 2)[-1] if content.startswith("---") else content
+        parts.append(f"=== SKILL: {f.name} ===\n{clean.strip()[:3000]}\n")
+    return "\n".join(parts)
+
 def load_base_curriculum() -> dict:
     path = Config.CURRICULUM_PATH
     if not path.exists():
@@ -62,7 +76,8 @@ def call_llm(prompt: str) -> str:
     if provider == "openrouter" and Config.OPENROUTER_API_KEY:
         try:
             headers = {"Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", "Content-Type": "application/json", "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", "X-Title": "JobAutoFit"}
-            payload = {"model": "meta-llama/llama-3.1-8b-instruct:free", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
+            model = Config.OPENROUTER_MODEL or "meta-llama/llama-3.1-8b-instruct:free"
+            payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
             r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=45)
             if r.status_code == 200:
                 return r.json()["choices"][0]["message"]["content"]
@@ -89,9 +104,13 @@ def evaluate_and_optimize_resume(job_title: str, company: str, job_description: 
     Analisa o grau de compatibilidade e otimiza o curriculo para passar pelos filtros ATS.
     Retorna: (score_0_100, motivo_match, cv_otimizado_dict, carta_de_apresentacao)
     """
+    # Carrega contexto das skills_ia (se existir no .exe ou no sistema de arquivos)
+    skills_context = load_skills_context()
     prompt = f"""
 Voce e um especialista em recrutamento e sistemas ATS (Applicant Tracking System).
-Analise a vaga abaixo e compare com o curriculo base do candidato.
+
+--- CONTEXTO DAS SKILLS DISPONIVEIS ---
+{skills_context}
 
 --- VAGA ---
 Titulo: {job_title}
@@ -104,16 +123,17 @@ Descricao:
 
 --- INSTRUÇÕES ---
 1. Calcule a porcentagem de compatibilidade (0 a 100) baseada nos requisitos da vaga vs habilidades do candidato.
-2. Reescreva o resumo profissional e selecione/reorganize as principais habilidades e destaques de experiência para DESTACAR os termos exatos exigidos pela vaga (SEM INVENTAR dados falsos).
-3. Escreva uma carta de apresentação (Cover Letter) curta, profissional e persuasiva em português.
+2. Utilize o contexto das SKILLS DISPONIVEIS para guiar a reestruturacao (se aplicavel).
+3. Reescreva o resumo profissional e selecione/reorganize as principais habilidades e destaques de experiencia para DESTACAR os termos exatos exigidos pela vaga (SEM INVENTAR dados falsos).
+4. Escreva uma carta de apresentacao (Cover Letter) curta, profissional e persuasiva em portugues.
 
-Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de código):
+Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de codigo):
 {{
   "match_score": 85,
-  "match_reason": "Breve justificativa dos pontos de aderência.",
+  "match_reason": "Breve justificativa dos pontos de aderencia.",
   "optimized_summary": "Resumo profissional focado nas palavras-chave da vaga...",
   "optimized_skills": ["Habilidade 1", "Habilidade 2", "Habilidade 3"],
-  "cover_letter": "Texto da carta de apresentação..."
+  "cover_letter": "Texto da carta de apresentacao..."
 }}
 """
     response_text = call_llm(prompt)
