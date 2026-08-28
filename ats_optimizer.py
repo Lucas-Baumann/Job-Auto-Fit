@@ -74,16 +74,45 @@ def call_llm(prompt: str) -> str:
     if provider == "groq" and Config.GROQ_API_KEY:
         return _call_openai_compat(prompt, Config.GROQ_API_KEY, "https://api.groq.com/openai/v1/chat/completions", "llama3-8b-8192")
     if provider == "openrouter" and Config.OPENROUTER_API_KEY:
-        try:
-            headers = {"Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", "Content-Type": "application/json", "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", "X-Title": "JobAutoFit"}
-            model = Config.OPENROUTER_MODEL or "meta-llama/llama-3.1-8b-instruct:free"
-            payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=45)
-            if r.status_code == 200:
-                return r.json()["choices"][0]["message"]["content"]
-            print(f"[ATS AI] OpenRouter erro {r.status_code}: {r.text[:300]}")
-        except Exception as e:
-            print(f"[ATS AI] OpenRouter erro: {e}")
+        # Modelos para tentar (ordem de preferência)
+        models_to_try = []
+        seen = set()
+        for m in [Config.OPENROUTER_MODEL, 
+                  "meta-llama/llama-3.1-8b-instruct:free",
+                  "mistralai/mistral-7b-instruct:free",
+                  "google/gemini-flash-1.5:free"]:
+            if m and m not in seen:
+                seen.add(m)
+                models_to_try.append(m)
+
+        for model in models_to_try:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", 
+                    "Content-Type": "application/json", 
+                    "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", 
+                    "X-Title": "JobAutoFit"
+                }
+                # Sem temperature (alguns free não aceitam), com max_tokens
+                payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2000}
+                r = requests.post("https://openrouter.ai/api/v1/chat/completions", 
+                                 headers={"Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", 
+                                         "Content-Type": "application/json", 
+                                         "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", 
+                                         "X-Title": "JobAutoFit"},
+                                 json={"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2000}, 
+                                 timeout=45)
+                if r.status_code == 200:
+                    return r.json()["choices"][0]["message"]["content"]
+                else:
+                    err = f"HTTP {r.status_code}: {r.text[:500]}"
+                    print(f"[ATS AI] OpenRouter modelo '{model}' falhou: {r.status_code} - {r.text[:300]}")
+                    continue
+            except Exception as e:
+                print(f"[ATS AI] OpenRouter erro com modelo '{model}': {e}")
+                continue
+        # Se chegou aqui, todos falharam
+        print(f"[ATS AI] OpenRouter: todos os modelos falharam.")
         return ""
     if provider == "custom" and Config.CUSTOM_LLM_URL and Config.CUSTOM_LLM_KEY:
         return _call_openai_compat(prompt, Config.CUSTOM_LLM_KEY, Config.CUSTOM_LLM_URL, "default")

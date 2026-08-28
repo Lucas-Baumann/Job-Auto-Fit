@@ -124,6 +124,7 @@ class App(tb.Window):
         self.var_claude_key=tk.StringVar(value=self.env.get("CLAUDE_API_KEY",""))
         self.var_groq_key=tk.StringVar(value=self.env.get("GROQ_API_KEY",""))
         self.var_openrouter_key=tk.StringVar(value=self.env.get("OPENROUTER_API_KEY",""))
+        self.var_openrouter_model=tk.StringVar(value=self.env.get("OPENROUTER_MODEL","meta-llama/llama-3.1-8b-instruct:free"))
         self.var_custom_url=tk.StringVar(value=self.env.get("CUSTOM_LLM_URL",""))
         self.var_custom_key=tk.StringVar(value=self.env.get("CUSTOM_LLM_KEY",""))
         self.var_smtp_host=tk.StringVar(value=self.env.get("SMTP_HOST","smtp.gmail.com"))
@@ -704,7 +705,23 @@ class App(tb.Window):
             tb.Label(self.frame_ia_dynamic, text="Recomendado gratuito: Gemini ou OpenRouter. Sem chave usa heurístico e funções ficam cinza.", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=(4,0))
         elif p == "openrouter":
             make_key_row(self.frame_ia_dynamic, "OpenRouter Key", self.var_openrouter_key, "Gratuito: openrouter.ai/keys\nAgrupa Gemini/Claude/Llama gratuitos. Recomendado!")
-            tb.Label(self.frame_ia_dynamic, text="OpenRouter — chaves gratuitas com vários modelos (openrouter.ai/keys). Use modelo free: meta-llama/llama-3.1-8b-instruct:free", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=(2,0))
+            # dropdown de modelo (o usuário escolhe qual modelo gratuito usar)
+            frm_model = tb.Frame(self.frame_ia_dynamic); frm_model.pack(fill=X, pady=2)
+            tb.Label(frm_model, text="Modelo:").pack(side=LEFT, padx=5)
+            # Lista oficial de modelos gratuitos OpenRouter (confirmada pelo usuário: openrouter.ai/keys, variante free)
+            openrouter_free_models = [
+                "inclusionai/ling-3.0-flash-fin:free",
+                "nvidia/nemotron-3.5-lightning:free",
+                "thinkingmachines/inkling-small:free",
+                "thinkingmachines/inkling:free",
+                "z-ai/glm-5.2:free",
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
+                "google/gemma-4-31b-it:free",
+            ]
+            self.combo_openrouter_model = tb.Combobox(frm_model, textvariable=self.var_openrouter_model, values=openrouter_free_models, state="readonly", width=42)
+            self.combo_openrouter_model.pack(side=LEFT, padx=5, fill=X, expand=True)
+            info_icon(frm_model, "Escolha o modelo gratuito do OpenRouter.\nCada um consome a mesma chave universal.").pack(side=LEFT, padx=4)
+            tb.Label(self.frame_ia_dynamic, text="OpenRouter — chave universal gratuita (openrouter.ai/keys). Modelos confirmados pelo usuário (free): inclusionai/ling-3.0-flash-fin, nvidia/nemotron-3.5-lightning, thinkingmachines/inkling-small, thinkingmachines/inkling, z-ai/glm-5.2, nvidia/nemotron-3-ultra-550b-a55b, google/gemma-4-31b-it. Modelo padrão: inclusionai/ling-3.0-flash-fin:free", font=("Segoe UI",8), bootstyle="secondary").pack(anchor=W, pady=(2,0))
         elif p == "ollama":
             frm = tb.Frame(self.frame_ia_dynamic); frm.pack(fill=X, pady=2)
             tb.Label(frm, text="Ollama Host", width=14, anchor=W).pack(side=LEFT, padx=5)

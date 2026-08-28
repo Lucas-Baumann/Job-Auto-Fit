@@ -25,7 +25,7 @@ class Config:
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")  # modelos free: mistral-7b, qwen-2.5-7b, phi-3-mini, gemini-flash-1.5, deepseek-r1
     CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "")
     CUSTOM_LLM_KEY = os.getenv("CUSTOM_LLM_KEY", "")
 
