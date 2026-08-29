@@ -36,6 +36,7 @@ class Config:
     SMTP_PASS = os.getenv("SMTP_PASS", "")
 
     # Credenciais
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
     LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL", "")
     LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD", "")
     GUPY_EMAIL = os.getenv("GUPY_EMAIL", "")

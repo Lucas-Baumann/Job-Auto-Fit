@@ -5,6 +5,10 @@ Profile Generator — cria README de perfil GitHub na estética perfeita (Lucas-
 - LLM opcional reescreve bio/resumo mantendo veracidade
 """
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 import requests
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -407,3 +411,57 @@ def write_repo_output(username: str, repo: str, markdown: str) -> str:
     path = out_dir / f"README_{repo}.md"
     path.write_text(markdown, encoding="utf-8")
     return str(path)
+
+def _git_push_file(username: str, repo: str, token: str, file_content: str, target_path: str, commit_msg: str, extra_files: Dict[str,str]=None) -> str:
+    """Clona repo, sobrescreve arquivo, commit e push. Retorna mensagem."""
+    if not token:
+        raise ValueError("GITHUB_TOKEN não informado — crie em github.com/settings/tokens (classic, scope repo)")
+    tmpdir = tempfile.mkdtemp(prefix="gh_push_")
+    try:
+        # token no URL (sem log)
+        safe_user = requests.utils.quote(username)
+        # usa token como user:oauth
+        clone_url = f"https://{token}@github.com/{username}/{repo}.git"
+        # clone shallow
+        subprocess.run(["git","clone","--depth","1",clone_url, tmpdir], check=True, capture_output=True, text=True, timeout=30)
+        # configura git
+        subprocess.run(["git","-C",tmpdir,"config","user.name","JobAutoFit"], check=True)
+        subprocess.run(["git","-C",tmpdir,"config","user.email","jobautofit@local"], check=True)
+        # escreve arquivo principal
+        dest = Path(tmpdir) / target_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(file_content, encoding="utf-8")
+        # arquivos extras (ex: workflow)
+        if extra_files:
+            for rel, content in extra_files.items():
+                p = Path(tmpdir) / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content, encoding="utf-8")
+        # add
+        to_add = [target_path] + list(extra_files.keys() if extra_files else [])
+        subprocess.run(["git","-C",tmpdir,"add"] + to_add, check=True)
+        # commit (se nada mudou, ignora)
+        result = subprocess.run(["git","-C",tmpdir,"diff","--cached","--quiet"])
+        if result.returncode == 0:
+            return "sem alterações — já está atualizado"
+        subprocess.run(["git","-C",tmpdir,"commit","-m",commit_msg], check=True, capture_output=True, text=True)
+        # push
+        subprocess.run(["git","-C",tmpdir,"push","origin","HEAD:main"], check=True, capture_output=True, text=True, timeout=30)
+        return "push ok"
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or e.stdout or str(e))[:600]
+        # esconde token
+        err = err.replace(token, "***")
+        raise RuntimeError(err)
+    finally:
+        try: shutil.rmtree(tmpdir, ignore_errors=True)
+        except: pass
+
+def push_profile_readme(username: str, token: str, markdown: str, workflow: str = None) -> str:
+    extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)} if workflow is None else {}
+    # workflow já está em SNAKE_WORKFLOW, sempre inclui
+    extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)}
+    return _git_push_file(username, username, token, markdown, "README.md", "docs: atualiza README perfil via JobAutoFit", extra_files=extra)
+
+def push_repo_readme(username: str, repo: str, token: str, markdown: str) -> str:
+    return _git_push_file(username, repo, token, markdown, "README.md", f"docs: atualiza README via JobAutoFit — {repo}")

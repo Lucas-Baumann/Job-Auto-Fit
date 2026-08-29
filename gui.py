@@ -132,6 +132,7 @@ class App(tb.Window):
         self.var_linkedin_posts_limit=tk.IntVar(value=self.search_cfg.get("linkedin_posts_limit", self.search_cfg.get("limit_per_source",8)))
         self.var_profile_user=tk.StringVar(value=(self.curriculum.get("personal_info",{}).get("github","").split("/")[-1].strip() if self.curriculum.get("personal_info",{}).get("github") else "Lucas-Baumann") or "Lucas-Baumann")
         self.var_profile_use_llm=tk.BooleanVar(value=True)
+        self.var_github_token=tk.StringVar(value=self.env.get("GITHUB_TOKEN",""))
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
 
@@ -679,9 +680,14 @@ class App(tb.Window):
         tb.Label(top,text="Username GitHub").pack(side=LEFT,padx=5); tb.Entry(top,textvariable=self.var_profile_user,width=24).pack(side=LEFT,padx=5)
         tb.Checkbutton(top,text="Usar IA para reescrever bio",variable=self.var_profile_use_llm,bootstyle="round-toggle").pack(side=LEFT,padx=10)
         info_icon(top,"Se ativado e IA configurada (aba 3), reescreve bio/linhas typing com seu currículo + perfil antigo. Sem IA usa heurístico.").pack(side=LEFT)
+        token_row=tb.Frame(f); token_row.pack(fill=X,pady=4)
+        tb.Label(token_row,text="GitHub Token (repo scope)").pack(side=LEFT,padx=5); self.ent_github_token=tb.Entry(token_row,textvariable=self.var_github_token,show="*",width=40); self.ent_github_token.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(token_row,"Crie em github.com/settings/tokens (classic) com scope 'repo' — necessário para push direto. Deixe vazio para só gerar local.").pack(side=LEFT)
+        tb.Button(token_row,text="Salvar",bootstyle="secondary-outline",width=8,command=lambda:self.save_all(silent=True)).pack(side=LEFT,padx=5)
         btns=tb.Frame(f); btns.pack(fill=X,pady=5)
         tb.Button(btns,text="🔍 Analisar perfil antigo",bootstyle="info-outline",command=self.analyze_profile).pack(side=LEFT,padx=5)
         tb.Button(btns,text="✨ Gerar README Perfil",bootstyle="success",command=self.generate_profile).pack(side=LEFT,padx=5)
+        tb.Button(btns,text="🚀 Gerar e Push Perfil",bootstyle="success",command=self.generate_and_push_profile).pack(side=LEFT,padx=5)
         tb.Button(btns,text="📂 Abrir output_github",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
         tb.Button(btns,text="📋 Copiar workflow snake",bootstyle="secondary-outline",command=self.copy_snake_workflow).pack(side=LEFT,padx=5)
         self.txt_profile_log=tk.Text(f,height=8,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
@@ -693,6 +699,7 @@ class App(tb.Window):
         top_repos=tb.Frame(card_repos); top_repos.pack(fill=X)
         tb.Button(top_repos,text="🔍 Buscar Repos do Perfil",bootstyle="info-outline",command=self.fetch_profile_repos).pack(side=LEFT,padx=5)
         tb.Button(top_repos,text="✨ Reformular Selecionados (⭐)",bootstyle="warning",command=self.generate_selected_repos).pack(side=LEFT,padx=5)
+        tb.Button(top_repos,text="🚀 Push Selecionados",bootstyle="success",command=self.push_selected_repos).pack(side=LEFT,padx=5)
         tb.Button(top_repos,text="📂 Abrir saída",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
         tb.Label(top_repos,text="  Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT,padx=5)
         cols_repos=("star","repo","lang","stars","readme")
@@ -822,11 +829,62 @@ class App(tb.Window):
         except Exception as e:
             self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Repos",str(e))
 
+    def generate_and_push_profile(self):
+        user=self.var_profile_user.get().strip()
+        token=self.var_github_token.get().strip() or self.env.get("GITHUB_TOKEN","")
+        if not user: messagebox.showwarning("Perfil","Informe username"); return
+        if not token: messagebox.showwarning("Token","Informe GitHub Token (repo) para push"); return
+        if not messagebox.askyesno("Push Perfil",f"Gerar README para {user}/{user} e fazer push direto?\nIsso sobrescreve o README remoto."):
+            return
+        self.save_all(silent=True)
+        use_llm=bool(self.var_profile_use_llm.get())
+        self.txt_profile_log.insert(tk.END,f"\n[Perfil Push] Gerando e enviando para {user}/{user}...\n"); self.update_idletasks()
+        try:
+            from profile_generator import fetch_old_readme, generate_profile_readme, push_profile_readme
+            old=fetch_old_readme(user)
+            md, info = generate_profile_readme(user, self.curriculum, old, use_llm=use_llm)
+            # salva local primeiro
+            from profile_generator import write_profile_output
+            write_profile_output(user, md)
+            self.txt_profile_log.insert(tk.END,"  Gerado local, fazendo push...\n"); self.update_idletasks()
+            msg=push_profile_readme(user, token, md)
+            self.txt_profile_log.insert(tk.END,f"  ✓ {msg} — https://github.com/{user}/{user}\n")
+            messagebox.showinfo("Perfil",f"Push ok em https://github.com/{user}/{user}")
+            self.txt_profile_log.see(tk.END)
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro push: {e}\n"); messagebox.showerror("Push Perfil",str(e))
+
+    def push_selected_repos(self):
+        user=self.var_profile_user.get().strip()
+        token=self.var_github_token.get().strip() or self.env.get("GITHUB_TOKEN","")
+        if not self.repos_starred: messagebox.showwarning("Repos","Selecione ao menos 1 repo com ⭐"); return
+        if not token: messagebox.showwarning("Token","Informe GitHub Token (repo)"); return
+        if not messagebox.askyesno("Push Repos",f"Fazer push de {len(self.repos_starred)} READMEs para GitHub?\nRepos: {', '.join(sorted(self.repos_starred))}"):
+            return
+        self.save_all(silent=True)
+        use_llm=bool(self.var_profile_use_llm.get())
+        self.txt_profile_log.insert(tk.END,f"\n[Repos Push] {len(self.repos_starred)} repos...\n"); self.update_idletasks()
+        try:
+            from profile_generator import fetch_repo_readme, generate_repo_readme, push_repo_readme
+            for repo in sorted(self.repos_starred):
+                self.txt_profile_log.insert(tk.END,f"  → {repo} gerando..."); self.update_idletasks()
+                old=fetch_repo_readme(user, repo)
+                md, info = generate_repo_readme(user, repo, self.curriculum, old, use_llm=use_llm)
+                # write local
+                from profile_generator import write_repo_output
+                write_repo_output(user, repo, md)
+                self.txt_profile_log.insert(tk.END," push..."); self.update_idletasks()
+                msg=push_repo_readme(user, repo, token, md)
+                self.txt_profile_log.insert(tk.END,f" {msg}\n"); self.txt_profile_log.see(tk.END)
+            messagebox.showinfo("Repos","Push concluído! Verifique no GitHub.")
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Push Repos",str(e))
+
     # Save/export
     def save_all(self,silent=False):
         self.curriculum["personal_info"]={"name":self.var_name.get().strip(),"email":self.var_email.get().strip(),"phone":self.var_phone.get().strip(),"location":self.var_location.get().strip(),"linkedin":self.var_linkedin.get().strip(),"github":self.var_github.get().strip()}
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
-        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),OPENROUTER_MODEL=self.var_openrouter_model.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
+        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),OPENROUTER_MODEL=self.var_openrouter_model.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
         cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get())}
         save_search_config(cfg); self.search_cfg=cfg
