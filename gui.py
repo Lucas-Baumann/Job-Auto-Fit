@@ -244,15 +244,42 @@ class App(tb.Window):
         if not p: return
         try:
             from importer import import_file_to_curriculum
+            from config import Config
+            # aviso sobre IA
+            has_llm = any([Config.GEMINI_API_KEY, Config.OPENAI_API_KEY, Config.CLAUDE_API_KEY, Config.GROQ_API_KEY, Config.OPENROUTER_API_KEY, Config.CUSTOM_LLM_KEY]) or Config.LLM_PROVIDER=="ollama"
+            if not has_llm:
+                # mostra aviso não-bloqueante no log e tooltip
+                self._log("[Import] Sem IA configurada → usando heurístico. Para melhor análise de experiências/formação, configure OpenRouter/Gemini na aba 3.")
             parsed=import_file_to_curriculum(Path(p))
-            # merge
-            for k in ["name","email","phone","linkedin","github"]:
+            # merge personal_info (inclui location)
+            for k in ["name","email","phone","linkedin","github","location"]:
                 if parsed.get("personal_info",{}).get(k): self.curriculum.setdefault("personal_info",{})[k]=parsed["personal_info"][k]
             if parsed.get("skills"): self.curriculum["skills"]=list(dict.fromkeys(self.curriculum.get("skills",[])+parsed["skills"]))
-            if parsed.get("summary") and not self.txt_summary.get("1.0","end").strip(): self.txt_summary.delete("1.0",tk.END); self.txt_summary.insert("1.0",parsed["summary"])
-            # refresh
-            self.var_name.set(self.curriculum["personal_info"].get("name","")); self.var_email.set(self.curriculum["personal_info"].get("email","")); self.var_phone.set(self.curriculum["personal_info"].get("phone","")); self.var_linkedin.set(self.curriculum["personal_info"].get("linkedin","")); self.var_github.set(self.curriculum["personal_info"].get("github",""))
-            self._refresh_skills_list(); messagebox.showinfo("Importar",f"Importado de {Path(p).name}\nRevise os campos antes de salvar.")
+            if parsed.get("summary") and not self.txt_summary.get("1.0","end").strip(): 
+                self.txt_summary.delete("1.0",tk.END); self.txt_summary.insert("1.0",parsed["summary"])
+            elif parsed.get("summary"):
+                # se já tem resumo, mostra mas não sobrescreve automaticamente
+                pass
+            # experiências e formação (novo)
+            if parsed.get("experiences"):
+                self.curriculum["experiences"]=parsed["experiences"]
+            if parsed.get("education"):
+                self.curriculum["education"]=parsed["education"]
+            if parsed.get("languages"):
+                self.curriculum["languages"]=parsed["languages"]
+            # refresh UI
+            pi=self.curriculum.get("personal_info",{})
+            self.var_name.set(pi.get("name","")); self.var_email.set(pi.get("email","")); self.var_phone.set(pi.get("phone","")); self.var_location.set(pi.get("location","")); self.var_linkedin.set(pi.get("linkedin","")); self.var_github.set(pi.get("github",""))
+            self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list()
+            # mensagem com aviso sobre IA
+            exp_count=len(parsed.get("experiences",[]))
+            edu_count=len(parsed.get("education",[]))
+            msg=f"Importado de {Path(p).name}\nExperiências: {exp_count} | Formação: {edu_count} | Skills: {len(parsed.get('skills',[]))}\nRevise os campos antes de salvar."
+            if not has_llm:
+                msg+="\n\n⚠ Sem IA configurada — análise heurística. Com IA (aba 3 → OpenRouter/Gemini) a extração de experiências/formação é 100% precisa e preenche automaticamente."
+                messagebox.showwarning("Importar — IA recomendada",msg)
+            else:
+                messagebox.showinfo("Importar",msg + "\n\n✓ IA usada para melhor análise.")
         except Exception as e: messagebox.showerror("Importar",str(e))
     def suggest_mandatory(self):
         skills = self.curriculum.get("skills", [])
