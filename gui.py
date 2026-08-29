@@ -270,6 +270,16 @@ class App(tb.Window):
         sb.pack(side=RIGHT,fill=Y); canvas.pack(side=LEFT,fill=BOTH,expand=True)
         inner=tb.Frame(canvas); canvas.create_window((0,0),window=inner,anchor="nw")
         inner.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        # scroll com roda do mouse (fix: antes não detectava)
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        # Windows
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Linux
+        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+        # garante foco ao entrar na aba
+        inner.bind("<Enter>", lambda e: canvas.focus_set())
         card=tb.Labelframe(inner,text="Palavras-chave (vírgula)",padding=10,bootstyle="primary"); card.pack(fill=X,pady=5)
         tb.Entry(card,textvariable=self.var_keywords).pack(fill=X)
         tb.Label(card,text="Ex: Desenvolvedor Python, Backend, Django, FastAPI, AWS",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W,pady=(4,0))
@@ -393,37 +403,41 @@ class App(tb.Window):
     def _build_ia(self):
         f=self.tab_ia
         card=tb.Labelframe(f,text="Provedor IA (gratuito ou pago) — campo OPCIONAL",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
-        row=tb.Frame(card); row.pack(fill=X)
-        tb.Label(row,text="Provedor").pack(side=LEFT,padx=5); self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","ollama","openai","claude","groq","openrouter","custom"],state="readonly",width=12); self.combo_llm.pack(side=LEFT,padx=5)
-        info_icon(row, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago, use sua chave\n• openrouter = free tier (openrouter.ai/keys) com modelos :free").pack(side=LEFT)
-        tb.Label(row,text="Gemini Key").pack(side=LEFT,padx=(15,5)); self.ent_gemini=tb.Entry(row,textvariable=self.var_gemini_key,show="*",width=32); self.ent_gemini.pack(side=LEFT,padx=5,fill=X,expand=True)
-        info_icon(row, "Chave gratuita do Google Gemini. Deixe em branco para usar heurístico ou Ollama/outra IA paga.").pack(side=LEFT)
-        def toggle(): self.ent_gemini.config(show="" if self.ent_gemini.cget("show")=="*" else "*"); btn_show.config(text="Ocultar" if self.ent_gemini.cget("show")=="" else "Mostrar")
-        btn_show=tb.Button(row,text="Mostrar",bootstyle="secondary-outline",command=toggle,width=8); btn_show.pack(side=LEFT,padx=5)
-        self.btn_test_gemini=tb.Button(row,text="Testar Conexão",bootstyle="success-outline",command=self.test_gemini); self.btn_test_gemini.pack(side=LEFT,padx=5)
+        row_prov=tb.Frame(card); row_prov.pack(fill=X)
+        tb.Label(row_prov,text="Provedor").pack(side=LEFT,padx=5); self.combo_llm=tb.Combobox(row_prov,textvariable=self.var_llm_provider,values=["gemini","ollama","openai","claude","groq","openrouter","custom"],state="readonly",width=16); self.combo_llm.pack(side=LEFT,padx=5)
+        info_icon(row_prov, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago\n• openrouter = free tier (openrouter.ai/keys) :free").pack(side=LEFT)
+        self.btn_test_gemini=tb.Button(row_prov,text="Testar Conexão",bootstyle="success-outline",command=self.test_gemini); self.btn_test_gemini.pack(side=LEFT,padx=5)
         self.lbl_ai_status=tb.Label(card,text="",font=("Segoe UI",8,"bold")); self.lbl_ai_status.pack(anchor=W,pady=(6,0))
-        tb.Label(card,text="Gemini gratuito: aistudio.google.com/app/apikey — deixe em branco para heurístico. Funções com IA ficam cinza sem chave.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W)
-        row2=tb.Frame(card); row2.pack(fill=X,pady=6)
-        tb.Label(row2,text="Ollama Host").pack(side=LEFT,padx=5); self.ent_ollama_host=tb.Entry(row2,textvariable=self.var_ollama_host,width=28); self.ent_ollama_host.pack(side=LEFT,padx=5)
-        info_icon(row2, "IA local gratuita. Instale em ollama.com e rode 'ollama run llama3'").pack(side=LEFT)
-        tb.Label(row2,text="Modelo").pack(side=LEFT,padx=5); self.ent_ollama_model=tb.Entry(row2,textvariable=self.var_ollama_model,width=18); self.ent_ollama_model.pack(side=LEFT,padx=5)
-        # Linha chaves pagas
-        row3=tb.Frame(card); row3.pack(fill=X,pady=6)
-        tb.Label(row3,text="OpenAI Key").pack(side=LEFT,padx=5); self.ent_openai=tb.Entry(row3,textvariable=self.var_openai_key,show="*",width=22); self.ent_openai.pack(side=LEFT,padx=5)
-        info_icon(row3, "platform.openai.com/api-keys — pago, modelo gpt-4o-mini").pack(side=LEFT)
-        tb.Label(row3,text="Claude Key").pack(side=LEFT,padx=5); self.ent_claude=tb.Entry(row3,textvariable=self.var_claude_key,show="*",width=22); self.ent_claude.pack(side=LEFT,padx=5)
-        info_icon(row3, "console.anthropic.com — pago, modelo claude-3-haiku").pack(side=LEFT)
-        tb.Label(row3,text="Groq Key").pack(side=LEFT,padx=5); self.ent_groq=tb.Entry(row3,textvariable=self.var_groq_key,show="*",width=22); self.ent_groq.pack(side=LEFT,padx=5)
-        info_icon(row3, "console.groq.com — gratuito/pago, rápido").pack(side=LEFT)
-        row_or=tb.Frame(card); row_or.pack(fill=X,pady=6)
-        tb.Label(row_or,text="OpenRouter Key").pack(side=LEFT,padx=5); self.ent_openrouter=tb.Entry(row_or,textvariable=self.var_openrouter_key,show="*",width=28); self.ent_openrouter.pack(side=LEFT,padx=5)
-        info_icon(row_or, "openrouter.ai/keys → Free tier. Modelos :free (llama-3.1, mistral-7b, gemma-2, deepseek-r1). Sem cartão para free.").pack(side=LEFT)
-        tb.Label(row_or,text="Modelo").pack(side=LEFT,padx=5); self.combo_openrouter_model=tb.Combobox(row_or,textvariable=self.var_openrouter_model,values=["meta-llama/llama-3.1-8b-instruct:free","mistralai/mistral-7b-instruct:free","google/gemma-2-9b-it:free","deepseek/deepseek-r1:free","qwen/qwen-2.5-7b-instruct:free","meta-llama/llama-3.2-3b-instruct:free","google/gemini-flash-1.5:free"],width=32); self.combo_openrouter_model.pack(side=LEFT,padx=5)
-        info_icon(row_or, "Escolha um modelo :free. Se um falhar, o app tenta os outros automaticamente em ats_optimizer:76. Recomendado: llama-3.1-8b:free").pack(side=LEFT)
-        row4=tb.Frame(card); row4.pack(fill=X,pady=4)
-        tb.Label(row4,text="Custom URL (compatível OpenAI)").pack(side=LEFT,padx=5); self.ent_custom_url=tb.Entry(row4,textvariable=self.var_custom_url,width=38); self.ent_custom_url.pack(side=LEFT,padx=5,fill=X,expand=True)
-        info_icon(row4, "Para provedores tipo DeepSeek, Mistral, Together, etc. Ex: https://api.deepseek.com/v1/chat/completions").pack(side=LEFT)
-        tb.Label(row4,text="Custom Key").pack(side=LEFT,padx=5); self.ent_custom_key=tb.Entry(row4,textvariable=self.var_custom_key,show="*",width=22); self.ent_custom_key.pack(side=LEFT,padx=5)
+        tb.Label(card,text="Gemini gratuito: aistudio.google.com/app/apikey — deixe em branco para heurístico.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W)
+        # container dinâmico — mostra só o provider selecionado
+        self.frame_ia_dynamic=tb.Frame(card); self.frame_ia_dynamic.pack(fill=X,pady=6)
+        self.frame_gemini=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_gemini,text="Gemini Key").pack(side=LEFT,padx=5); self.ent_gemini=tb.Entry(self.frame_gemini,textvariable=self.var_gemini_key,show="*",width=40); self.ent_gemini.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(self.frame_gemini, "Chave gratuita do Google Gemini. Deixe em branco para heurístico.").pack(side=LEFT)
+        def toggle(): self.ent_gemini.config(show="" if self.ent_gemini.cget("show")=="*" else "*"); btn_show.config(text="Ocultar" if self.ent_gemini.cget("show")=="" else "Mostrar")
+        btn_show=tb.Button(self.frame_gemini,text="Mostrar",bootstyle="secondary-outline",command=toggle,width=8); btn_show.pack(side=LEFT,padx=5)
+        self.frame_ollama=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_ollama,text="Ollama Host").pack(side=LEFT,padx=5); self.ent_ollama_host=tb.Entry(self.frame_ollama,textvariable=self.var_ollama_host,width=28); self.ent_ollama_host.pack(side=LEFT,padx=5)
+        info_icon(self.frame_ollama, "IA local gratuita. Instale em ollama.com e rode 'ollama run llama3'").pack(side=LEFT)
+        tb.Label(self.frame_ollama,text="Modelo").pack(side=LEFT,padx=5); self.ent_ollama_model=tb.Entry(self.frame_ollama,textvariable=self.var_ollama_model,width=18); self.ent_ollama_model.pack(side=LEFT,padx=5)
+        self.frame_openai=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_openai,text="OpenAI Key").pack(side=LEFT,padx=5); self.ent_openai=tb.Entry(self.frame_openai,textvariable=self.var_openai_key,show="*",width=40); self.ent_openai.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(self.frame_openai, "platform.openai.com/api-keys — pago, modelo gpt-4o-mini").pack(side=LEFT)
+        self.frame_claude=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_claude,text="Claude Key").pack(side=LEFT,padx=5); self.ent_claude=tb.Entry(self.frame_claude,textvariable=self.var_claude_key,show="*",width=40); self.ent_claude.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(self.frame_claude, "console.anthropic.com — pago, modelo claude-3-haiku").pack(side=LEFT)
+        self.frame_groq=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_groq,text="Groq Key").pack(side=LEFT,padx=5); self.ent_groq=tb.Entry(self.frame_groq,textvariable=self.var_groq_key,show="*",width=40); self.ent_groq.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(self.frame_groq, "console.groq.com — gratuito/pago, rápido").pack(side=LEFT)
+        self.frame_openrouter=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_openrouter,text="OpenRouter Key").pack(side=LEFT,padx=5); self.ent_openrouter=tb.Entry(self.frame_openrouter,textvariable=self.var_openrouter_key,show="*",width=28); self.ent_openrouter.pack(side=LEFT,padx=5)
+        info_icon(self.frame_openrouter, "openrouter.ai/keys → Free tier :free sem cartão").pack(side=LEFT)
+        tb.Label(self.frame_openrouter,text="Modelo").pack(side=LEFT,padx=5); self.combo_openrouter_model=tb.Combobox(self.frame_openrouter,textvariable=self.var_openrouter_model,values=["meta-llama/llama-3.1-8b-instruct:free","mistralai/mistral-7b-instruct:free","google/gemma-2-9b-it:free","deepseek/deepseek-r1:free","qwen/qwen-2.5-7b-instruct:free","meta-llama/llama-3.2-3b-instruct:free","google/gemini-flash-1.5:free"],width=32); self.combo_openrouter_model.pack(side=LEFT,padx=5)
+        info_icon(self.frame_openrouter, "Se um :free falhar, tenta os outros automaticamente.").pack(side=LEFT)
+        self.frame_custom=tb.Frame(self.frame_ia_dynamic)
+        tb.Label(self.frame_custom,text="Custom URL").pack(side=LEFT,padx=5); self.ent_custom_url=tb.Entry(self.frame_custom,textvariable=self.var_custom_url,width=38); self.ent_custom_url.pack(side=LEFT,padx=5,fill=X,expand=True)
+        info_icon(self.frame_custom, "Ex: https://api.deepseek.com/v1/chat/completions").pack(side=LEFT)
+        tb.Label(self.frame_custom,text="Custom Key").pack(side=LEFT,padx=5); self.ent_custom_key=tb.Entry(self.frame_custom,textvariable=self.var_custom_key,show="*",width=22); self.ent_custom_key.pack(side=LEFT,padx=5)
         # trace para habilitar/desabilitar
         self.var_gemini_key.trace_add("write", lambda *_: self._update_ai_state())
         self.var_openrouter_key.trace_add("write", lambda *_: self._update_ai_state())
@@ -479,6 +493,18 @@ class App(tb.Window):
         if hasattr(self, 'ent_custom_url'):
             s2 = NORMAL if p=="custom" else DISABLED
             self.ent_custom_url.config(state=s2); self.ent_custom_key.config(state=s2)
+        # mostra só frame do provider selecionado (dropdown único dinâmico)
+        if hasattr(self, 'frame_gemini'):
+            for f in [self.frame_gemini, self.frame_ollama, self.frame_openai, self.frame_claude, self.frame_groq, self.frame_openrouter, self.frame_custom]:
+                try: f.pack_forget()
+                except: pass
+            if p=="gemini": self.frame_gemini.pack(fill=X, pady=2)
+            elif p=="ollama": self.frame_ollama.pack(fill=X, pady=2)
+            elif p=="openai": self.frame_openai.pack(fill=X, pady=2)
+            elif p=="claude": self.frame_claude.pack(fill=X, pady=2)
+            elif p=="groq": self.frame_groq.pack(fill=X, pady=2)
+            elif p=="openrouter": self.frame_openrouter.pack(fill=X, pady=2)
+            elif p=="custom": self.frame_custom.pack(fill=X, pady=2)
         if hasattr(self, 'lbl_ai_status'):
             if ai_available:
                 self.lbl_ai_status.config(text=f"✓ IA habilitada ({p}) — reestruturação ATS e carta com IA ativas", bootstyle="success")
@@ -657,10 +683,30 @@ class App(tb.Window):
         tb.Button(btns,text="✨ Gerar README Perfil",bootstyle="success",command=self.generate_profile).pack(side=LEFT,padx=5)
         tb.Button(btns,text="📂 Abrir output_github",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
         tb.Button(btns,text="📋 Copiar workflow snake",bootstyle="secondary-outline",command=self.copy_snake_workflow).pack(side=LEFT,padx=5)
-        self.txt_profile_log=tk.Text(f,height=14,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
+        self.txt_profile_log=tk.Text(f,height=8,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
         self.txt_profile_log.insert("1.0","Pronto. Informe username e clique Analisar. O gerador usa a estética perfeita (dark tokyonight + summary-cards + snake picture) e analisa seu README antigo se existir.\n")
-        row=tb.Frame(f); row.pack(fill=X,pady=5)
+        row=tb.Frame(f); row.pack(fill=X,pady=4)
         tb.Label(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT)
+        # Repositórios
+        card_repos=tb.Labelframe(f,text="Repositórios — selecione com ⭐ para reformular README",padding=8,bootstyle="warning"); card_repos.pack(fill=BOTH,expand=True,pady=5)
+        top_repos=tb.Frame(card_repos); top_repos.pack(fill=X)
+        tb.Button(top_repos,text="🔍 Buscar Repos do Perfil",bootstyle="info-outline",command=self.fetch_profile_repos).pack(side=LEFT,padx=5)
+        tb.Button(top_repos,text="✨ Reformular Selecionados (⭐)",bootstyle="warning",command=self.generate_selected_repos).pack(side=LEFT,padx=5)
+        tb.Button(top_repos,text="📂 Abrir saída",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
+        tb.Label(top_repos,text="  Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT,padx=5)
+        cols_repos=("star","repo","lang","stars","readme")
+        self.tree_repos=tb.Treeview(card_repos,columns=cols_repos,show="headings",height=7,bootstyle="warning")
+        for c,t,w in [("star","⭐",30),("repo","Repositório",200),("lang","Lang",80),("stars","★",50),("readme","README?",80)]:
+            self.tree_repos.heading(c,text=t); self.tree_repos.column(c,width=w,anchor=CENTER if c in ("star","stars","readme") else W)
+        self.tree_repos.pack(fill=BOTH,expand=True,pady=5)
+        self.tree_repos.bind("<ButtonRelease-1>", lambda e: self.after(100, self.toggle_repo_star))
+        self.repos_cache=[]
+        self.repos_starred=set()
+        # carrega seleção persistida
+        try:
+            sel_path=BASE_DIR/"github_selection.json"
+            if sel_path.exists(): self.repos_starred=set(json.loads(sel_path.read_text(encoding="utf-8")))
+        except: pass
 
     def analyze_profile(self):
         user=self.var_profile_user.get().strip()
@@ -714,6 +760,66 @@ class App(tb.Window):
             self.txt_profile_log.insert(tk.END,f"[Snake] Workflow em {src} — copie para https://github.com/{self.var_profile_user.get()}/{self.var_profile_user.get()}/.github/workflows/\n")
             webbrowser.open(src.as_uri())
         except Exception as e: messagebox.showerror("Snake",str(e))
+
+    def fetch_profile_repos(self):
+        user=self.var_profile_user.get().strip()
+        if not user: messagebox.showwarning("Repos","Informe username"); return
+        self.txt_profile_log.insert(tk.END,f"\n[Repos] Buscando repos de {user}...\n"); self.update_idletasks()
+        try:
+            from profile_generator import fetch_repos, fetch_repo_readme
+            repos=fetch_repos(user)
+            # limpa tree
+            for i in self.tree_repos.get_children(): self.tree_repos.delete(i)
+            self.repos_cache=repos
+            for r in sorted(repos, key=lambda x: x.get("stargazers_count",0), reverse=True)[:30]:
+                name=r.get("name","")
+                lang=r.get("language") or "-"
+                stars=r.get("stargazers_count",0)
+                has_readme="sim" if fetch_repo_readme(user, name) else "não"
+                star="⭐" if name in self.repos_starred else ""
+                self.tree_repos.insert("", "end", values=(star, name, lang, stars, has_readme))
+            self.txt_profile_log.insert(tk.END,f"  {len(repos)} repos encontrados (mostrando até 30 ordenados por ★). Clique na linha para ⭐.\n")
+            self.txt_profile_log.see(tk.END)
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro repos: {e}\n"); messagebox.showerror("Repos",str(e))
+
+    def toggle_repo_star(self):
+        sel=self.tree_repos.selection()
+        if not sel: return
+        vals=self.tree_repos.item(sel[0],"values")
+        if not vals: return
+        repo=vals[1]
+        if repo in self.repos_starred:
+            self.repos_starred.remove(repo)
+            self.tree_repos.item(sel[0], values=("", vals[1], vals[2], vals[3], vals[4]))
+        else:
+            self.repos_starred.add(repo)
+            self.tree_repos.item(sel[0], values=("⭐", vals[1], vals[2], vals[3], vals[4]))
+        # persiste
+        try: (BASE_DIR/"github_selection.json").write_text(json.dumps(sorted(self.repos_starred), ensure_ascii=False, indent=2), encoding="utf-8")
+        except: pass
+        self.txt_profile_log.insert(tk.END,f"[⭐] {'+'+repo if repo in self.repos_starred else '-'+repo} | total ⭐: {len(self.repos_starred)}\n"); self.txt_profile_log.see(tk.END)
+
+    def generate_selected_repos(self):
+        user=self.var_profile_user.get().strip()
+        if not self.repos_starred: messagebox.showwarning("Repos","Selecione ao menos 1 repo com ⭐ (clique na linha)"); return
+        self.save_all(silent=True)
+        use_llm=bool(self.var_profile_use_llm.get())
+        self.txt_profile_log.insert(tk.END,f"\n[Repos] Reformulando {len(self.repos_starred)} repos com IA={'sim' if use_llm else 'não'}...\n"); self.update_idletasks()
+        try:
+            from profile_generator import fetch_repo_readme, generate_repo_readme, write_repo_output
+            for repo in sorted(self.repos_starred):
+                self.txt_profile_log.insert(tk.END,f"  → {repo} ..."); self.update_idletasks()
+                old=fetch_repo_readme(user, repo)
+                md, info = generate_repo_readme(user, repo, self.curriculum, old, use_llm=use_llm)
+                path=write_repo_output(user, repo, md)
+                has = "tinha README" if info["has_old"] else "sem README"
+                self.txt_profile_log.insert(tk.END,f" ✓ {path} ({has}, {info['language']}, {info['langs']})\n")
+                self.txt_profile_log.see(tk.END)
+            messagebox.showinfo("Repos",f"{len(self.repos_starred)} READMEs gerados em output_github/README_<repo>.md\nRevise antes de copiar para cada repo.")
+            self._open_folder(BASE_DIR/"output_github")
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Repos",str(e))
 
     # Save/export
     def save_all(self,silent=False):

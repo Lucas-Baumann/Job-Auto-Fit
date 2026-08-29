@@ -264,3 +264,146 @@ def write_profile_output(username: str, markdown: str, workflow: str = ""):
     (out_dir / f"README_{username}.md").write_text(markdown, encoding="utf-8")
     (out_dir / "snake.yml").write_text(SNAKE_WORKFLOW.format(username=username), encoding="utf-8")
     return str(out_dir / f"README_{username}.md")
+
+# ── Repositórios ──
+REPO_TEMPLATE = """# {repo_name}
+
+{badges}
+
+> {description}
+
+## 🚀 Stack
+{stack_bullets}
+
+## ✨ Funcionalidades
+{features}
+
+## 📦 Instalação
+```bash
+{install_cmd}
+```
+
+## ▶️ Uso
+```bash
+{usage_cmd}
+```
+
+## 📸 Preview
+<!-- Substitua por seu GIF/screenshot: docs/demo.gif -->
+<!-- ![Demo](docs/demo.gif) -->
+
+{sub_extra}
+
+---
+<sub>Gerado por JobAutoFit — estética dark tokyonight + shields + análise do README antigo + currículo</sub>
+"""
+
+def fetch_repo_readme(username: str, repo: str) -> str:
+    for branch in ["main","master","dev"]:
+        try:
+            url = f"https://raw.githubusercontent.com/{username}/{repo}/{branch}/README.md"
+            r = requests.get(url, timeout=8)
+            if r.status_code == 200 and len(r.text) > 30:
+                return r.text
+        except: pass
+    # tenta via API contents
+    try:
+        r = requests.get(f"https://api.github.com/repos/{username}/{repo}/readme", timeout=8, headers={"Accept":"application/vnd.github.v3.raw"})
+        if r.status_code == 200 and len(r.text) > 30:
+            return r.text
+    except: pass
+    return ""
+
+def fetch_repo_languages(username: str, repo: str) -> List[str]:
+    try:
+        r = requests.get(f"https://api.github.com/repos/{username}/{repo}/languages", timeout=8)
+        if r.status_code == 200:
+            data = r.json()
+            # ordena por bytes
+            return sorted(data.keys(), key=lambda k: data[k], reverse=True)[:6]
+    except: pass
+    return []
+
+def check_repo_has_readme(username: str, repo: str) -> bool:
+    return bool(fetch_repo_readme(username, repo))
+
+def generate_repo_readme(username: str, repo: str, curriculum: dict, old_readme: str = "", use_llm: bool = True) -> Tuple[str, Dict]:
+    """Gera README de repo atrativo na estética dark, analisando projeto. Retorna (md, info)."""
+    # metadados
+    repo_data={}
+    langs=[]
+    try:
+        r = requests.get(f"https://api.github.com/repos/{username}/{repo}", timeout=8)
+        if r.status_code == 200:
+            repo_data = r.json()
+            langs = fetch_repo_languages(username, repo)
+    except: pass
+    description = repo_data.get("description") or f"Projeto {repo} — {repo_data.get('language','')}"
+    language_main = repo_data.get("language") or (langs[0] if langs else "JavaScript")
+    stars = repo_data.get("stargazers_count", 0)
+
+    # heurística install/usage por linguagem
+    lang_low = language_main.lower() if language_main else ""
+    if "typescript" in lang_low or "javascript" in lang_low or "react" in lang_low:
+        install_cmd = "npm install\nnpm run dev"
+        usage_cmd = "npm start"
+        stack_bullets = "- React Native / Expo / TypeScript\n- Navegação + AsyncStorage\n- Estilo dark tokyonight"
+    elif "python" in lang_low:
+        install_cmd = "pip install -r requirements.txt"
+        usage_cmd = "python main.py --help  # ou python gui.py"
+        stack_bullets = "- Python 3.11+\n- Requests / BeautifulSoup / ReportLab\n- ttkbootstrap dark"
+    elif "php" in lang_low:
+        install_cmd = "composer install"
+        usage_cmd = "php artisan serve"
+        stack_bullets = "- PHP / Laravel\n- MySQL\n- Blade + Tailwind"
+    else:
+        install_cmd = "git clone https://github.com/{u}/{r}.git\ncd {r}".format(u=username, r=repo)
+        usage_cmd = "veja docs/"
+        stack_bullets = f"- {language_main}\n- Git + GitHub\n- CI via Actions"
+
+    badges = f"[![Stars](https://img.shields.io/github/stars/{username}/{repo}?style=flat&color=00BC8C)](https://github.com/{username}/{repo}) [![Language](https://img.shields.io/github/languages/top/{username}/{repo}?color=00BC8C)](https://github.com/{username}/{repo}) [![Last Commit](https://img.shields.io/github/last-commit/{username}/{repo}?color=00BC8C)](https://github.com/{username}/{repo}/commits)"
+    features = "- Funcionalidade principal descrita com clareza\n- Código limpo + dark theme\n- Pronto para portfolio"
+    sub_extra = ""
+
+    if use_llm and (Config.OPENROUTER_API_KEY or Config.GEMINI_API_KEY or Config.OPENAI_API_KEY):
+        try:
+            prompt = f"""
+Você é especialista em READMEs de repositórios para portfolio. Reestruture o README mantendo veracidade.
+
+REPO: {username}/{repo}
+DESCRIÇÃO ATUAL: {description}
+LINGUAGEM PRINCIPAL: {language_main}
+LINGUAGENS: {langs}
+README ANTIGO (800 chars):
+{old_readme[:800]}
+
+CURRICULO (para contexto de autor):
+{json.dumps(curriculum, ensure_ascii=False, indent=2)[:1200]}
+
+TEMPLATE: badges shields + stack bullets + instalação + uso + preview placeholder
+Retorne JSON exato: {{"description":"1 frase","features":"- bullet\\n- bullet\\n- bullet","stack_bullets":"- ...","install_cmd":"...","usage_cmd":"...","sub_extra":"1 frase opcional"}}
+Sem markdown, apenas JSON.
+"""
+            resp = call_llm(prompt)
+            if resp:
+                clean = resp.replace("```json","").replace("```","").strip()
+                data = json.loads(clean)
+                description = data.get("description", description)
+                features = data.get("features", features)
+                stack_bullets = data.get("stack_bullets", stack_bullets)
+                install_cmd = data.get("install_cmd", install_cmd)
+                usage_cmd = data.get("usage_cmd", usage_cmd)
+                sub_extra = data.get("sub_extra", "")
+        except Exception as e:
+            print(f"[Repo] LLM falhou {repo}: {e}")
+
+    md = REPO_TEMPLATE.format(repo_name=repo, badges=badges, description=description, stack_bullets=stack_bullets, features=features, install_cmd=install_cmd, usage_cmd=usage_cmd, sub_extra=sub_extra)
+    info = {"repo": repo, "language": language_main, "stars": stars, "has_old": bool(old_readme), "langs": langs}
+    return md, info
+
+def write_repo_output(username: str, repo: str, markdown: str) -> str:
+    out_dir = Config.BASE_DIR / "output_github"
+    out_dir.mkdir(exist_ok=True)
+    path = out_dir / f"README_{repo}.md"
+    path.write_text(markdown, encoding="utf-8")
+    return str(path)
