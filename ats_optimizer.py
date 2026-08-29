@@ -93,15 +93,11 @@ def call_llm(prompt: str) -> str:
                     "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", 
                     "X-Title": "JobAutoFit"
                 }
-                # Sem temperature (alguns free não aceitam), com max_tokens
                 payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2000}
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", 
-                                 headers={"Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", 
-                                         "Content-Type": "application/json", 
-                                         "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", 
-                                         "X-Title": "JobAutoFit"},
-                                 json={"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2000}, 
-                                 timeout=45)
+                                 headers=headers,
+                                  json=payload, 
+                                  timeout=45)
                 if r.status_code == 200:
                     return r.json()["choices"][0]["message"]["content"]
                 else:

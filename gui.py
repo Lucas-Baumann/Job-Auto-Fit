@@ -95,6 +95,8 @@ class App(tb.Window):
         self.var_openai_key=tk.StringVar(value=self.env.get("OPENAI_API_KEY",""))
         self.var_claude_key=tk.StringVar(value=self.env.get("CLAUDE_API_KEY",""))
         self.var_groq_key=tk.StringVar(value=self.env.get("GROQ_API_KEY",""))
+        self.var_openrouter_key=tk.StringVar(value=self.env.get("OPENROUTER_API_KEY",""))
+        self.var_openrouter_model=tk.StringVar(value=self.env.get("OPENROUTER_MODEL","meta-llama/llama-3.1-8b-instruct:free"))
         self.var_custom_url=tk.StringVar(value=self.env.get("CUSTOM_LLM_URL",""))
         self.var_custom_key=tk.StringVar(value=self.env.get("CUSTOM_LLM_KEY",""))
         self.var_smtp_host=tk.StringVar(value=self.env.get("SMTP_HOST","smtp.gmail.com"))
@@ -128,6 +130,8 @@ class App(tb.Window):
         self.var_schedule_hour=tk.StringVar(value=self.search_cfg.get("schedule_hour","08:00"))
         self.var_enable_linkedin_posts=tk.BooleanVar(value=self.search_cfg.get("enable_linkedin_posts",True))
         self.var_linkedin_posts_limit=tk.IntVar(value=self.search_cfg.get("linkedin_posts_limit", self.search_cfg.get("limit_per_source",8)))
+        self.var_profile_user=tk.StringVar(value=(self.curriculum.get("personal_info",{}).get("github","").split("/")[-1].strip() if self.curriculum.get("personal_info",{}).get("github") else "Lucas-Baumann") or "Lucas-Baumann")
+        self.var_profile_use_llm=tk.BooleanVar(value=True)
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
 
@@ -138,9 +142,9 @@ class App(tb.Window):
         tb.Button(top,text="Exportar",bootstyle="secondary-outline",command=self.export_config).pack(side=RIGHT,padx=5)
         tb.Button(top,text="Importar",bootstyle="secondary-outline",command=self.import_config).pack(side=RIGHT,padx=5)
         self.nb=tb.Notebook(self,bootstyle="dark"); self.nb.pack(fill=BOTH,expand=True,padx=10,pady=(0,10))
-        self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10)
-        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico ")
-        self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist()
+        self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10); self.tab_profile=tb.Frame(self.nb,padding=10)
+        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico "); self.nb.add(self.tab_profile,text=" 7. Perfil GitHub ")
+        self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist(); self._build_profile()
         bottom=tb.Frame(self,padding=(10,0,10,10)); bottom.pack(fill=X)
         tb.Button(bottom,text="Salvar Tudo",bootstyle="success",command=self.save_all).pack(side=LEFT)
         tb.Label(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",bootstyle="secondary",font=("Segoe UI",8)).pack(side=LEFT,padx=12)
@@ -390,8 +394,8 @@ class App(tb.Window):
         f=self.tab_ia
         card=tb.Labelframe(f,text="Provedor IA (gratuito ou pago) — campo OPCIONAL",padding=10,bootstyle="success"); card.pack(fill=X,pady=5)
         row=tb.Frame(card); row.pack(fill=X)
-        tb.Label(row,text="Provedor").pack(side=LEFT,padx=5); self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","ollama","openai","claude","groq","custom"],state="readonly",width=12); self.combo_llm.pack(side=LEFT,padx=5)
-        info_icon(row, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago, use sua chave").pack(side=LEFT)
+        tb.Label(row,text="Provedor").pack(side=LEFT,padx=5); self.combo_llm=tb.Combobox(row,textvariable=self.var_llm_provider,values=["gemini","ollama","openai","claude","groq","openrouter","custom"],state="readonly",width=12); self.combo_llm.pack(side=LEFT,padx=5)
+        info_icon(row, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago, use sua chave\n• openrouter = free tier (openrouter.ai/keys) com modelos :free").pack(side=LEFT)
         tb.Label(row,text="Gemini Key").pack(side=LEFT,padx=(15,5)); self.ent_gemini=tb.Entry(row,textvariable=self.var_gemini_key,show="*",width=32); self.ent_gemini.pack(side=LEFT,padx=5,fill=X,expand=True)
         info_icon(row, "Chave gratuita do Google Gemini. Deixe em branco para usar heurístico ou Ollama/outra IA paga.").pack(side=LEFT)
         def toggle(): self.ent_gemini.config(show="" if self.ent_gemini.cget("show")=="*" else "*"); btn_show.config(text="Ocultar" if self.ent_gemini.cget("show")=="" else "Mostrar")
@@ -411,12 +415,18 @@ class App(tb.Window):
         info_icon(row3, "console.anthropic.com — pago, modelo claude-3-haiku").pack(side=LEFT)
         tb.Label(row3,text="Groq Key").pack(side=LEFT,padx=5); self.ent_groq=tb.Entry(row3,textvariable=self.var_groq_key,show="*",width=22); self.ent_groq.pack(side=LEFT,padx=5)
         info_icon(row3, "console.groq.com — gratuito/pago, rápido").pack(side=LEFT)
+        row_or=tb.Frame(card); row_or.pack(fill=X,pady=6)
+        tb.Label(row_or,text="OpenRouter Key").pack(side=LEFT,padx=5); self.ent_openrouter=tb.Entry(row_or,textvariable=self.var_openrouter_key,show="*",width=28); self.ent_openrouter.pack(side=LEFT,padx=5)
+        info_icon(row_or, "openrouter.ai/keys → Free tier. Modelos :free (llama-3.1, mistral-7b, gemma-2, deepseek-r1). Sem cartão para free.").pack(side=LEFT)
+        tb.Label(row_or,text="Modelo").pack(side=LEFT,padx=5); self.combo_openrouter_model=tb.Combobox(row_or,textvariable=self.var_openrouter_model,values=["meta-llama/llama-3.1-8b-instruct:free","mistralai/mistral-7b-instruct:free","google/gemma-2-9b-it:free","deepseek/deepseek-r1:free","qwen/qwen-2.5-7b-instruct:free","meta-llama/llama-3.2-3b-instruct:free","google/gemini-flash-1.5:free"],width=32); self.combo_openrouter_model.pack(side=LEFT,padx=5)
+        info_icon(row_or, "Escolha um modelo :free. Se um falhar, o app tenta os outros automaticamente em ats_optimizer:76. Recomendado: llama-3.1-8b:free").pack(side=LEFT)
         row4=tb.Frame(card); row4.pack(fill=X,pady=4)
         tb.Label(row4,text="Custom URL (compatível OpenAI)").pack(side=LEFT,padx=5); self.ent_custom_url=tb.Entry(row4,textvariable=self.var_custom_url,width=38); self.ent_custom_url.pack(side=LEFT,padx=5,fill=X,expand=True)
         info_icon(row4, "Para provedores tipo DeepSeek, Mistral, Together, etc. Ex: https://api.deepseek.com/v1/chat/completions").pack(side=LEFT)
         tb.Label(row4,text="Custom Key").pack(side=LEFT,padx=5); self.ent_custom_key=tb.Entry(row4,textvariable=self.var_custom_key,show="*",width=22); self.ent_custom_key.pack(side=LEFT,padx=5)
         # trace para habilitar/desabilitar
         self.var_gemini_key.trace_add("write", lambda *_: self._update_ai_state())
+        self.var_openrouter_key.trace_add("write", lambda *_: self._update_ai_state())
         self.var_llm_provider.trace_add("write", lambda *_: self._update_ai_state())
         self.after(300, self._update_ai_state)
         card2=tb.Labelframe(f,text="E-mail SMTP (envio automático, opcional)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
@@ -441,22 +451,28 @@ class App(tb.Window):
         has_openai = bool(self.var_openai_key.get().strip())
         has_claude = bool(self.var_claude_key.get().strip())
         has_groq = bool(self.var_groq_key.get().strip())
+        has_openrouter = bool(self.var_openrouter_key.get().strip())
         has_custom = bool(self.var_custom_url.get().strip() and self.var_custom_key.get().strip())
         if p == "gemini": ai_available = has_gemini
         elif p == "openai": ai_available = has_openai
         elif p == "claude": ai_available = has_claude
         elif p == "groq": ai_available = has_groq
+        elif p == "openrouter": ai_available = has_openrouter
         elif p == "custom": ai_available = has_custom
         elif p == "ollama": ai_available = True
         else: ai_available = False
         if hasattr(self, 'btn_test_gemini'):
-            need_key = {"gemini": has_gemini, "openai": has_openai, "claude": has_claude, "groq": has_groq, "custom": has_custom, "ollama": True}.get(p, False)
+            need_key = {"gemini": has_gemini, "openai": has_openai, "claude": has_claude, "groq": has_groq, "openrouter": has_openrouter, "custom": has_custom, "ollama": True}.get(p, False)
             self.btn_test_gemini.config(state=NORMAL if need_key else DISABLED, bootstyle="success-outline" if need_key else "secondary")
         # habilitar apenas campos do provedor ativo
         if hasattr(self, 'ent_gemini'): self.ent_gemini.config(state=NORMAL if p=="gemini" else DISABLED)
         if hasattr(self, 'ent_openai'): self.ent_openai.config(state=NORMAL if p=="openai" else DISABLED)
         if hasattr(self, 'ent_claude'): self.ent_claude.config(state=NORMAL if p=="claude" else DISABLED)
         if hasattr(self, 'ent_groq'): self.ent_groq.config(state=NORMAL if p=="groq" else DISABLED)
+        if hasattr(self, 'ent_openrouter'): 
+            s_or = NORMAL if p=="openrouter" else DISABLED
+            self.ent_openrouter.config(state=s_or)
+            if hasattr(self, 'combo_openrouter_model'): self.combo_openrouter_model.config(state=s_or)
         if hasattr(self, 'ent_ollama_host'):
             s = NORMAL if p=="ollama" else DISABLED
             self.ent_ollama_host.config(state=s); self.ent_ollama_model.config(state=s)
@@ -479,6 +495,24 @@ class App(tb.Window):
                 self.lbl_exec_ai.config(text="IA desabilitada — execução usará heurístico (sem reestruturação por IA). Preencha a chave para habilitar.", bootstyle="secondary")
 
     def test_gemini(self):
+        p=self.var_llm_provider.get()
+        if p=="openrouter":
+            key=self.var_openrouter_key.get().strip()
+            model=self.var_openrouter_model.get().strip() or "meta-llama/llama-3.1-8b-instruct:free"
+            if not key: messagebox.showwarning("OpenRouter","Informe a key em openrouter.ai/keys"); return
+            try:
+                import requests
+                headers={"Authorization": f"Bearer {key}", "Content-Type":"application/json","HTTP-Referer":"https://github.com/Lucas-Baumann/Job-Auto-Fit","X-Title":"JobAutoFit"}
+                payload={"model": model, "messages":[{"role":"user","content":"Responda apenas OK"}],"max_tokens":20}
+                r=requests.post("https://openrouter.ai/api/v1/chat/completions",headers=headers,json=payload,timeout=20)
+                if r.status_code==200:
+                    txt=r.json()["choices"][0]["message"]["content"]
+                    messagebox.showinfo("OpenRouter",f"{model}: {txt[:200]}")
+                else:
+                    # tenta fallback gemini flash free
+                    messagebox.showerror("OpenRouter",f"{r.status_code}: {r.text[:400]}\nDica: verifique modelo :free e créditos em openrouter.ai/activity")
+            except Exception as e: messagebox.showerror("OpenRouter",str(e))
+            return
         key=self.var_gemini_key.get().strip()
         if not key: messagebox.showwarning("Gemini","Informe a key"); return
         try:
@@ -611,11 +645,81 @@ class App(tb.Window):
             con.close()
         except: pass
 
+    # Perfil GitHub
+    def _build_profile(self):
+        f=self.tab_profile
+        top=tb.Frame(f); top.pack(fill=X,pady=5)
+        tb.Label(top,text="Username GitHub").pack(side=LEFT,padx=5); tb.Entry(top,textvariable=self.var_profile_user,width=24).pack(side=LEFT,padx=5)
+        tb.Checkbutton(top,text="Usar IA para reescrever bio",variable=self.var_profile_use_llm,bootstyle="round-toggle").pack(side=LEFT,padx=10)
+        info_icon(top,"Se ativado e IA configurada (aba 3), reescreve bio/linhas typing com seu currículo + perfil antigo. Sem IA usa heurístico.").pack(side=LEFT)
+        btns=tb.Frame(f); btns.pack(fill=X,pady=5)
+        tb.Button(btns,text="🔍 Analisar perfil antigo",bootstyle="info-outline",command=self.analyze_profile).pack(side=LEFT,padx=5)
+        tb.Button(btns,text="✨ Gerar README Perfil",bootstyle="success",command=self.generate_profile).pack(side=LEFT,padx=5)
+        tb.Button(btns,text="📂 Abrir output_github",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
+        tb.Button(btns,text="📋 Copiar workflow snake",bootstyle="secondary-outline",command=self.copy_snake_workflow).pack(side=LEFT,padx=5)
+        self.txt_profile_log=tk.Text(f,height=14,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
+        self.txt_profile_log.insert("1.0","Pronto. Informe username e clique Analisar. O gerador usa a estética perfeita (dark tokyonight + summary-cards + snake picture) e analisa seu README antigo se existir.\n")
+        row=tb.Frame(f); row.pack(fill=X,pady=5)
+        tb.Label(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT)
+
+    def analyze_profile(self):
+        user=self.var_profile_user.get().strip()
+        if not user: messagebox.showwarning("Perfil","Informe username"); return
+        self.txt_profile_log.insert(tk.END,f"\n[Análise] Buscando {user}...\n"); self.txt_profile_log.see(tk.END); self.update_idletasks()
+        try:
+            from profile_generator import fetch_old_readme, fetch_github_user, fetch_repos, analyze_old_readme
+            old=fetch_old_readme(user)
+            info=analyze_old_readme(old)
+            udata=fetch_github_user(user)
+            repos=fetch_repos(user)
+            total_stars=sum(r.get("stargazers_count",0) for r in repos)
+            self.txt_profile_log.insert(tk.END,f"  Usuário: {udata.get('name','')} | Repos: {udata.get('public_repos', len(repos))} | Seguidores: {udata.get('followers',0)} | Estrelas totais: {total_stars}\n")
+            self.txt_profile_log.insert(tk.END,f"  README antigo: {info.get('status')} | len={info.get('len','0')} | issues: {info.get('issues')}\n")
+            if old:
+                self.txt_profile_log.insert(tk.END,f"  Preview antigo (500 chars):\n{info.get('preview','')[:500]}\n")
+            else:
+                self.txt_profile_log.insert(tk.END,"  Nenhum README encontrado em github.com/{user}/{user} — será criado do zero.\n")
+            self.txt_profile_log.see(tk.END)
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Análise",str(e))
+
+    def generate_profile(self):
+        user=self.var_profile_user.get().strip()
+        if not user: messagebox.showwarning("Perfil","Informe username"); return
+        self.save_all(silent=True)
+        use_llm=bool(self.var_profile_use_llm.get())
+        self.txt_profile_log.insert(tk.END,f"\n[Geração] Gerando README para {user} (IA={'sim' if use_llm else 'não'})...\n"); self.update_idletasks()
+        try:
+            from profile_generator import fetch_old_readme, generate_profile_readme, write_profile_output
+            old=fetch_old_readme(user)
+            md, info = generate_profile_readme(user, self.curriculum, old, use_llm=use_llm)
+            path=write_profile_output(user, md)
+            self.txt_profile_log.insert(tk.END,f"  ✓ Gerado em {path}\n  Repos: {info['public_repos']} | Estrelas: {info['total_stars']} | Skillicons: {info['skillicons']}\n")
+            self.txt_profile_log.insert(tk.END,"  Próximo: abra output_github, copie README_<user>.md para seu repo de perfil e snake.yml para .github/workflows/\n")
+            # preview no log
+            self.txt_profile_log.insert(tk.END,f"\n--- Preview (primeiras 800 chars) ---\n{md[:800]}\n")
+            self.txt_profile_log.see(tk.END)
+            messagebox.showinfo("Perfil",f"README gerado em {path}\nSnake workflow em output_github/snake.yml")
+            webbrowser.open((Path(path)).as_uri())
+        except Exception as e:
+            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Geração",str(e))
+
+    def copy_snake_workflow(self):
+        try:
+            from pathlib import Path as _P
+            src=_P(BASE_DIR/"output_github"/"snake.yml")
+            if not src.exists():
+                messagebox.showwarning("Snake","Gere o README primeiro (cria snake.yml)")
+                return
+            self.txt_profile_log.insert(tk.END,f"[Snake] Workflow em {src} — copie para https://github.com/{self.var_profile_user.get()}/{self.var_profile_user.get()}/.github/workflows/\n")
+            webbrowser.open(src.as_uri())
+        except Exception as e: messagebox.showerror("Snake",str(e))
+
     # Save/export
     def save_all(self,silent=False):
         self.curriculum["personal_info"]={"name":self.var_name.get().strip(),"email":self.var_email.get().strip(),"phone":self.var_phone.get().strip(),"location":self.var_location.get().strip(),"linkedin":self.var_linkedin.get().strip(),"github":self.var_github.get().strip()}
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
-        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
+        self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),OPENROUTER_MODEL=self.var_openrouter_model.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
         cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get())}
         save_search_config(cfg); self.search_cfg=cfg
