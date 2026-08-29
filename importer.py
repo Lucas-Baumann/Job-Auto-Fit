@@ -99,8 +99,12 @@ def heuristic_parse_curriculum(text: str) -> dict:
                 if p not in found:
                     found.append(p)
     for kw in skill_keywords:
-        # usa word boundary para evitar Java em JavaScript
-        if re.search(r"\b" + re.escape(kw) + r"\b", tl):
+        # usa word boundary para evitar Java em JavaScript; para .net/c# usa simples contém
+        if kw in [".net","c#"]:
+            matched = kw in tl
+        else:
+            matched = bool(re.search(r"\b" + re.escape(kw) + r"\b", tl))
+        if matched:
             # evita duplicatas case-insensitive
             norm = kw.replace("csharp","C#").replace("dotnet",".NET").replace("nextjs","Next.js")
             # mapeia para display bonito
@@ -140,6 +144,52 @@ def heuristic_parse_curriculum(text: str) -> dict:
         if not headers:
             header_pattern2 = re.compile(r"^(.+?)\s*[–-]\s*(.+?)\s*\|\s*(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4})|ATUAL)", re.MULTILINE)
             headers = list(header_pattern2.finditer(exp_block))
+        # terceiro fallback: formato sem pipe "Cargo - Empresa Data" (ex: Desenvolvedor Júnior - GaussFleet Maio de 2026 - Atual)
+        if not headers:
+            # detecta linhas que terminam com data e contêm " - "
+            date_tail = re.compile(r"(\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\s*/?\s*(?:de\s*)?\d{4})\s*[–-]\s*(?:Atual|ATUAL|\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\s*/?\s*(?:de\s*)?\d{4})\s*$", re.I)
+            tmp_headers=[]
+            for m in re.finditer(r"^(.+)$", exp_block, re.MULTILINE):
+                line=m.group(1).strip()
+                if line and " - " in line and date_tail.search(line) and len(line)<120 and not line.startswith("-") and not line.startswith("•"):
+                    # cria pseudo-match com grupos: cargo, empresa, periodo
+                    # tenta separar cargo-empresa e data
+                    date_match = date_tail.search(line)
+                    if date_match:
+                        period = date_match.group(0).strip()
+                        prefix = line[:date_match.start()].strip()
+                        # prefix é "Cargo - Empresa" ou "Cargo - Empresa Local"?
+                        # separa no último " - "
+                        if " - " in prefix:
+                            parts = prefix.rsplit(" - ",1)
+                            cargo = parts[0].strip()
+                            empresa = parts[1].strip()
+                        elif "–" in prefix:
+                            parts = prefix.rsplit("–",1)
+                            cargo = parts[0].strip()
+                            empresa = parts[1].strip()
+                        else:
+                            # trata "Autônomo" sem separador: ex "Desenvolvedor Front-end Autônomo"
+                            if re.search(r"Autônomo|Autonomo", prefix, re.I):
+                                m2 = re.search(r"(.+?)\s+(Autônomo|Autonomo)\s*$", prefix, re.I)
+                                if m2:
+                                    cargo = m2.group(1).strip()
+                                    empresa = m2.group(2).strip().title()
+                                else:
+                                    cargo = prefix
+                                    empresa = ""
+                            else:
+                                cargo = prefix
+                                empresa = ""
+                        # cria objeto similar a match com groups e start/end
+                        class Pseudo:
+                            def __init__(self,s,e,g): self._s=s; self._e=e; self._g=g
+                            def groups(self): return self._g
+                            def start(self): return self._s
+                            def end(self): return self._e
+                            def group(self, n): return self._g[n-1]
+                        tmp_headers.append(Pseudo(m.start(), m.end(), (cargo, empresa, period)))
+            headers = tmp_headers
         if headers:
             for idx, m in enumerate(headers):
                 # extrai cargo, empresa, local, periodo
@@ -163,8 +213,8 @@ def heuristic_parse_curriculum(text: str) -> dict:
                 block = block.replace("\r"," ").replace("\n"," ")
                 # split por "." + espaço (mantém frases)
                 raw_highlights = []
-                # tenta split por "•" ou ". " (não quebra front-end)
-                for part in re.split(r"[•\u2022]|\.\s+", block):
+                # tenta split por bullet " - " com espaços, "•" ou ". " (não quebra front-end)
+                for part in re.split(r"\s+-\s+|[•\u2022]|\.\s+", block):
                     p = part.strip(" .;,-\n\r")
                     if len(p) > 20 and not p.lower().startswith("atividades"):
                         # evita duplicatas e linhas muito curtas
