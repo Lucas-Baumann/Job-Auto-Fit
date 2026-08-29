@@ -78,9 +78,11 @@ def call_llm(prompt: str) -> str:
         models_to_try = []
         seen = set()
         for m in [Config.OPENROUTER_MODEL, 
-                  "meta-llama/llama-3.1-8b-instruct:free",
-                  "mistralai/mistral-7b-instruct:free",
-                  "google/gemini-flash-1.5:free"]:
+                  "google/gemma-4-26b-a4b-it:free",
+                  "nvidia/nemotron-3.5-lightning:free",
+                  "liquid/lfm-2.5-2.6b:free",
+                  "inclusionai/ling-3.0-flash-fin:free",
+                  "google/gemma-4-31b-it:free"]:
             if m and m not in seen:
                 seen.add(m)
                 models_to_try.append(m)

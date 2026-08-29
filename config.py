@@ -25,7 +25,7 @@ class Config:
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")  # modelos free: mistral-7b, qwen-2.5-7b, phi-3-mini, gemini-flash-1.5, deepseek-r1
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")  # free atuais (2026-08): gemma-4-26b, nemotron-3.5-lightning, ling-3.0-flash, etc - lista muda, digite manualmente se 404
     CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "")
     CUSTOM_LLM_KEY = os.getenv("CUSTOM_LLM_KEY", "")
 
