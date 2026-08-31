@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('curriculum_base.json', '.'), ('.env.example', '.'), ('logo.ico', '.'), ('skills_ia', 'skills_ia'), ('docs', 'docs')]
+datas = [('curriculum_base.json', '.'), ('.env.example', '.'), ('logo.ico', '.')]
 binaries = []
 hiddenimports = ['google.generativeai','plyer','pypdf','docx','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth']
 
