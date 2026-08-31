@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('curriculum_base.json', '.'), ('.env.example', '.'), ('logo.ico', '.')]
+datas = [('curriculum_base.json', '.'), ('.env.example', '.'), ('logo.ico', '.'), ('skills_ia', 'skills_ia'), ('docs', 'docs')]
 binaries = []
-hiddenimports = ['google.generativeai','plyer','pypdf','docx','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender']
+hiddenimports = ['google.generativeai','plyer','pypdf','docx','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth']
 
 tmp = collect_all('ttkbootstrap')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
