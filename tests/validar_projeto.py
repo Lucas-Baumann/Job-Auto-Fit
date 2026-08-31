@@ -43,15 +43,16 @@ try:
 except Exception as e:
     fail("CURRICULUM", str(e))
 
-# 4. DB
+# 4. DB (com URL única para evitar duplicata)
 try:
     from db import init_db, save_job
     init_db()
-    jid = save_job({"title":"Validacao","company":"Auto","url":"http://v","platform":"v","description":"v"})
+    import time
+    jid = save_job({"title":"Validacao","company":"Auto","url":f"http://v/{time.time()}","platform":"v","description":"v"})
     if jid > 0:
         ok("DB", f"init+sav OK (id={jid})")
     else:
-        fail("DB", "duplicado inesperado")
+        fail("DB", "duplicado inesperado (DB já contém job)")
 except Exception as e:
     fail("DB", str(e))
 
@@ -84,13 +85,20 @@ try:
 except Exception as e:
     fail("ATS", str(e))
 
-# 8. GitHub module
+# 8. GitHub/Profile module (github_optimizer foi substituído por profile_generator na nuvem)
 try:
-    from github_optimizer import fetch_repos, generate_project_readme
-    repos = fetch_repos("Lucas-Baumann")
-    ok("GITHUB_FETCH", f"{len(repos)} repos encontrados")
-    md = generate_project_readme(repos[0], {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]})
-    ok("GITHUB_README", f"md len={len(md)} chars")
+    try:
+        from github_optimizer import fetch_repos, generate_project_readme
+        repos = fetch_repos("Lucas-Baumann")
+        ok("GITHUB_FETCH", f"{len(repos)} repos (github_optimizer)")
+        md = generate_project_readme(repos[0], {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]})
+        ok("GITHUB_README", f"md len={len(md)} chars (github_optimizer)")
+    except ImportError:
+        from profile_generator import fetch_repos, generate_profile_readme
+        repos = fetch_repos("Lucas-Baumann")
+        ok("GITHUB_FETCH", f"{len(repos)} repos (profile_generator)")
+        md, info = generate_profile_readme("Lucas-Baumann", {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]}, "", use_llm=False)
+        ok("PROFILE_GEN", f"profile md len={len(md)} chars, info={info}")
 except Exception as e:
     fail("GITHUB", str(e))
 

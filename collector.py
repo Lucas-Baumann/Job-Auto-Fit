@@ -5,10 +5,14 @@ import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-}
+try:
+    from stealth import random_headers
+    HEADERS = random_headers()
+except:
+    HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+    }
 
 # --- LinkedIn Posts: sinais de recrutador e de contratação ---
 RECRUITER_SIGNALS = [
@@ -147,6 +151,117 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     except Exception as e:
         print(f"[Collector] Erro ao buscar vagas no Remotive: {e}")
         
+    return jobs
+
+def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas públicas do InfoJobs (scraping leve)."""
+    jobs = []
+    url = f"https://www.infojobs.com.br/empregos.aspx?palavra={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("div.element-vaga, article.vaga, div.card-vaga")[:limit]
+            for card in cards:
+                title_el = card.find(["h2","h3","a"], class_=re.compile(r"title|vaga", re.I)) or card.find("a")
+                company_el = card.find(string=re.compile(r"Empresa", re.I))
+                # fallback genérico
+                title = title_el.get_text(strip=True) if title_el else keywords.title()
+                company = "InfoJobs"
+                link_el = card.find("a", href=True)
+                job_url = link_el["href"] if link_el else url
+                if job_url and job_url.startswith("/"): job_url = "https://www.infojobs.com.br" + job_url
+                desc = card.get_text(separator=' ', strip=True)[:800]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company,
+                    'location': "Brasil",
+                    'url': job_url,
+                    'platform': 'infojobs',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                time.sleep(0.5)
+    except Exception as e:
+        print(f"[Collector] InfoJobs erro: {e}")
+    return jobs
+
+def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas públicas da Catho."""
+    jobs = []
+    url = f"https://www.catho.com.br/vagas/?q={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("li.BoxVaga, div.vaga, article")[:limit]
+            for card in cards:
+                title_el = card.find(["h2","h3"]) or card.find("a", class_=re.compile(r"title", re.I))
+                title = title_el.get_text(strip=True) if title_el else keywords.title()
+                link_el = card.find("a", href=True)
+                job_url = link_el["href"] if link_el else url
+                if job_url and job_url.startswith("/"): job_url = "https://www.catho.com.br" + job_url
+                desc = card.get_text(separator=' ', strip=True)[:800]
+                jobs.append({
+                    'title': title[:90],
+                    'company': "Catho",
+                    'location': "Brasil",
+                    'url': job_url,
+                    'platform': 'catho',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                time.sleep(0.5)
+    except Exception as e:
+        print(f"[Collector] Catho erro: {e}")
+    return jobs
+
+def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas de TI do Programathor (focado em dev)."""
+    jobs = []
+    # Programathor: https://programathor.com.br/jobs?q=python
+    url = f"https://programathor.com.br/jobs?q={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("div.job, li.job, article.job")[:limit]
+            if not cards:
+                cards = soup.find_all("a", href=re.compile(r"/jobs/"))[:limit]
+                for a in cards:
+                    title = a.get_text(strip=True) or keywords.title()
+                    job_url = a["href"]
+                    if job_url.startswith("/"): job_url = "https://programathor.com.br" + job_url
+                    desc = a.parent.get_text(separator=' ', strip=True)[:800] if a.parent else title
+                    jobs.append({
+                        'title': title[:90],
+                        'company': "Programathor",
+                        'location': "Brasil",
+                        'url': job_url,
+                        'platform': 'programathor',
+                        'description': desc,
+                        'contact_email': extract_email(desc)
+                    })
+            else:
+                for card in cards:
+                    title_el = card.find(["h2","h3","a"])
+                    title = title_el.get_text(strip=True) if title_el else keywords.title()
+                    link_el = card.find("a", href=True)
+                    job_url = link_el["href"] if link_el else url
+                    if job_url.startswith("/"): job_url = "https://programathor.com.br" + job_url
+                    desc = card.get_text(separator=' ', strip=True)[:800]
+                    jobs.append({
+                        'title': title[:90],
+                        'company': "Programathor",
+                        'location': "Brasil",
+                        'url': job_url,
+                        'platform': 'programathor',
+                        'description': desc,
+                        'contact_email': extract_email(desc)
+                    })
+            time.sleep(0.5)
+    except Exception as e:
+        print(f"[Collector] Programathor erro: {e}")
     return jobs
 
 # ── Helpers para posts de recrutadores ──
@@ -429,6 +544,22 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
         # 3. Remotive
         remotive_jobs = fetch_remotive_jobs(kw, limit=limit_per_source)
         all_jobs.extend(remotive_jobs)
+
+        # 3b. InfoJobs
+        try:
+            ij_jobs = fetch_infojobs_jobs(kw, limit=max(1, limit_per_source//2))
+            all_jobs.extend(ij_jobs)
+        except: pass
+        # 3c. Catho
+        try:
+            catho_jobs = fetch_catho_jobs(kw, limit=max(1, limit_per_source//2))
+            all_jobs.extend(catho_jobs)
+        except: pass
+        # 3d. Programathor (TI)
+        try:
+            pg_jobs = fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2))
+            all_jobs.extend(pg_jobs)
+        except: pass
 
         # 4. LinkedIn Posts de recrutadores (nova fonte)
         if enable_linkedin_posts:
