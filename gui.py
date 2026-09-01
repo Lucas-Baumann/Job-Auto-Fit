@@ -243,12 +243,16 @@ class App(tb.Window):
         p=filedialog.askopenfilename(filetypes=[("PDF/DOCX/TXT","*.pdf *.docx *.txt"),("Todos","*.*")])
         if not p: return
         try:
+            # salvar IA config atual antes de verificar (usuário pode ter testado OK mas não salvado)
+            try: self.save_all(silent=True)
+            except: pass
             from importer import import_file_to_curriculum
             from config import Config
-            # aviso sobre IA
-            has_llm = any([Config.GEMINI_API_KEY, Config.OPENAI_API_KEY, Config.CLAUDE_API_KEY, Config.GROQ_API_KEY, Config.OPENROUTER_API_KEY, Config.CUSTOM_LLM_KEY]) or Config.LLM_PROVIDER=="ollama"
+            # verificar IA tanto via Config (salvo) quanto via GUI vars (atual)
+            has_llm_cfg = any([Config.GEMINI_API_KEY, Config.OPENAI_API_KEY, Config.CLAUDE_API_KEY, Config.GROQ_API_KEY, Config.OPENROUTER_API_KEY, Config.CUSTOM_LLM_KEY]) or Config.LLM_PROVIDER=="ollama"
+            has_llm_gui = any([self.var_gemini_key.get().strip(), self.var_openai_key.get().strip(), self.var_claude_key.get().strip(), self.var_groq_key.get().strip(), self.var_openrouter_key.get().strip(), self.var_custom_key.get().strip()])
+            has_llm = has_llm_cfg or has_llm_gui
             if not has_llm:
-                # mostra aviso não-bloqueante no log e tooltip
                 self._log("[Import] Sem IA configurada → usando heurístico. Para melhor análise de experiências/formação, configure OpenRouter/Gemini na aba 3.")
             parsed=import_file_to_curriculum(Path(p))
             # merge personal_info (inclui location)
