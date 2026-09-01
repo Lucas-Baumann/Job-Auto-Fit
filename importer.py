@@ -83,20 +83,33 @@ def heuristic_parse_curriculum(text: str) -> dict:
             if line.strip() and len(line.strip().split())>=2:
                 data["personal_info"]["name"]=line.strip().title()
                 break
-    # skills: lista expandida + extrai de linha Tecnologias:
+    # skills: extrai APENAS do bloco Skills para não inventar do texto geral
     skill_keywords = ["python","java","javascript","typescript","html","css","vue.js","vue","react","next.js","nextjs","node",".net","dotnet","c#","csharp","php","ruby","rails","mysql","sql server","sql","docker","git","linux","aws","azure","fastapi","django","kubernetes","bootstrap","react native","expo","node.js","postgresql","postgres"]
     found=[]
-    tl=text.lower()
-    # extrai de "Tecnologias:" ou "Skills:" ou "Habilidades"
+    # tenta extrair bloco Skills/Competências primeiro
+    skills_block = _extract_section(text, "COMPETÊNCIAS TÉCNICAS", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO","PROJETOS","CURSOS","IDIOMA","OBJETIVO"])
+    if not skills_block:
+        skills_block = _extract_section(text, "COMPETÊNCIAS", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO"])
+    if not skills_block:
+        skills_block = _extract_section(text, "HABILIDADES", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO"])
+    if not skills_block:
+        skills_block = _extract_section(text, "SKILLS", ["EXPERIENCE","EDUCATION","SUMMARY"])
+    tl = (skills_block if skills_block else text).lower()
+    # extrai de "Tecnologias:" ou linha com "•" do PDF gerado
     m = re.search(r"Tecnologias:\s*([^\n]+)", text, re.I)
     if m:
         tech_line = m.group(1)
-        # split por vírgula, ponto e vírgula
-        for part in re.split(r"[,;/]", tech_line):
+        for part in re.split(r"[,;/•]", tech_line):
             p=part.strip()
-            if p and len(p)<30:
-                # normaliza
-                if p not in found:
+            if p and len(p)<30 and p not in found:
+                found.append(p)
+    # fallback "•" do PDF ATS (ex: "React • Next.js • TypeScript")
+    if not found and skills_block and "•" in skills_block:
+        for part in skills_block.split("•"):
+            p=part.strip().replace("\n"," ")
+            if p and len(p)<30 and len(p.split())<=3 and p not in found:
+                # filtrar cabeçalhos
+                if p.lower() not in ["competências técnicas e tecnologias","habilidades","skills"]:
                     found.append(p)
     for kw in skill_keywords:
         # usa word boundary para evitar Java em JavaScript; para .net/c# usa simples contém
