@@ -258,7 +258,14 @@ class App(tb.Window):
             # merge personal_info (inclui location)
             for k in ["name","email","phone","linkedin","github","location"]:
                 if parsed.get("personal_info",{}).get(k): self.curriculum.setdefault("personal_info",{})[k]=parsed["personal_info"][k]
-            if parsed.get("skills"): self.curriculum["skills"]=list(dict.fromkeys(self.curriculum.get("skills",[])+parsed["skills"]))
+            if parsed.get("skills"):
+                # limpar exemplo genérico ao importar (substitui, não soma)
+                generico = {"python","javascript","sql","git","apis rest"}
+                atual = {s.lower() for s in self.curriculum.get("skills",[])}
+                if atual == generico or len(self.curriculum.get("skills",[]))<=5:
+                    self.curriculum["skills"]=parsed["skills"]
+                else:
+                    self.curriculum["skills"]=list(dict.fromkeys(self.curriculum.get("skills",[])+parsed["skills"]))
             if parsed.get("summary") and not self.txt_summary.get("1.0","end").strip(): 
                 self.txt_summary.delete("1.0",tk.END); self.txt_summary.insert("1.0",parsed["summary"])
             elif parsed.get("summary"):
