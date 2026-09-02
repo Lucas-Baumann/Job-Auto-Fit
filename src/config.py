@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente
-BASE_DIR = Path(__file__).resolve().parent
+# Raiz do projeto é um nível acima de src/
+BASE_DIR = Path(__file__).resolve().parent.parent
 env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(env_path)

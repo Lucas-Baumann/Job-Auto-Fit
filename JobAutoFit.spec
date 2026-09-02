@@ -12,7 +12,7 @@ datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 
 a = Analysis(
     ['gui.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
