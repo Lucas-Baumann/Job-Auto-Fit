@@ -24,11 +24,29 @@ def init_db():
             contact_email TEXT,
             match_score INTEGER DEFAULT 0,
             match_reason TEXT,
-            status TEXT DEFAULT 'pending', -- pending, ats_done, applied, skipped, failed
+            status TEXT DEFAULT 'pending', -- pending, ats_done, ready_to_send, applied, prepared, skipped, failed
+            outcome TEXT,                  -- sem_resposta, visualizado, entrevista, teste_tecnico, proposta, rejeitado, contratado
             resume_pdf_path TEXT,
             cover_letter_path TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             applied_at TIMESTAMP
+        )
+    """)
+    # migração leve: CREATE TABLE IF NOT EXISTS não altera uma tabela já existente,
+    # então bancos jobs.db criados antes desta versão não ganham a coluna nova sozinhos.
+    cursor.execute("PRAGMA table_info(jobs)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+    if "outcome" not in existing_cols:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN outcome TEXT")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ats_cache (
+            cache_key TEXT PRIMARY KEY,
+            score INTEGER,
+            reason TEXT,
+            optimized_summary TEXT,
+            optimized_skills TEXT,
+            cover_letter TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -96,6 +114,34 @@ def update_job_status(job_id: int, status: str, resume_path: str = None, cover_p
             applied_at = COALESCE(?, applied_at)
         WHERE id = ?
     """, (status, resume_path, cover_path, applied_at, job_id))
+    conn.commit()
+    conn.close()
+
+def update_job_outcome(job_id: int, outcome: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE jobs SET outcome = ? WHERE id = ?", (outcome, job_id))
+    conn.commit()
+    conn.close()
+
+def get_ats_cache(cache_key: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ats_cache WHERE cache_key = ?", (cache_key,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def save_ats_cache(cache_key: str, score: int, reason: str, optimized_summary: str, optimized_skills_json: str, cover_letter: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO ats_cache (cache_key, score, reason, optimized_summary, optimized_skills, cover_letter)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET
+            score=excluded.score, reason=excluded.reason, optimized_summary=excluded.optimized_summary,
+            optimized_skills=excluded.optimized_skills, cover_letter=excluded.cover_letter, created_at=CURRENT_TIMESTAMP
+    """, (cache_key, score, reason, optimized_summary, optimized_skills_json, cover_letter))
     conn.commit()
     conn.close()
 

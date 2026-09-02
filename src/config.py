@@ -4,26 +4,30 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Raiz do projeto: se empacotado, é pasta do projeto (exe está em dist/), não Temp/_MEI
-if getattr(sys, 'frozen', False):
-    exe_dir = Path(sys.executable).resolve().parent
-    if exe_dir.name.lower() == "dist":
-        BASE_DIR = exe_dir.parent
-    else:
-        BASE_DIR = exe_dir
-    # fallback se ainda cair em Temp/_MEI (PyInstaller onefile extrai para Temp)
-    if "_MEI" in str(BASE_DIR) or "Temp" in str(BASE_DIR):
-        # tenta exe_dir novamente, se ainda for Temp, usa parent do exe
-        try:
-            BASE_DIR = Path(sys.executable).resolve().parent
-            if BASE_DIR.name.lower() == "dist":
-                BASE_DIR = BASE_DIR.parent
-        except:
-            BASE_DIR = Path.cwd()
+# Detecta PyInstaller via sys._MEIPASS ou sys.frozen ou caminho com _MEI
+is_frozen = getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS') or "_MEI" in str(Path(__file__).resolve())
+if is_frozen:
+    # exe está em dist/ -> projeto é um nível acima; senão, é a pasta do exe
+    try:
+        exe_path = Path(sys.executable).resolve() if hasattr(sys, 'executable') else Path(__file__).resolve()
+        exe_dir = exe_path.parent
+        if exe_dir.name.lower() == "dist":
+            BASE_DIR = exe_dir.parent
+        else:
+            # se exe está em Temp/_MEI, usa cwd (onde o exe foi lançado, que é dist ou projeto)
+            if "_MEI" in str(exe_dir) or "Temp" in str(exe_dir):
+                BASE_DIR = Path.cwd()
+                # se cwd é Temp, tenta exe_dir original
+                if "_MEI" in str(BASE_DIR):
+                    BASE_DIR = Path(sys.executable).resolve().parent
+                    if BASE_DIR.name.lower() == "dist":
+                        BASE_DIR = BASE_DIR.parent
+            else:
+                BASE_DIR = exe_dir
+    except:
+        BASE_DIR = Path.cwd()
 else:
     BASE_DIR = Path(__file__).resolve().parent.parent
-    # também corrige caso rodando via python mas com path Temp (raro)
-    if "_MEI" in str(BASE_DIR):
-        BASE_DIR = Path.cwd()
 env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(env_path)

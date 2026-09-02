@@ -6,13 +6,35 @@ from bs4 import BeautifulSoup
 from typing import List, Dict
 
 try:
-    from stealth import random_headers
-    HEADERS = random_headers()
-except:
-    HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-    }
+    from stealth import random_headers, jitter_sleep
+except Exception:
+    def jitter_sleep(base: float = 1.5, jitter: float = 1.0):
+        time.sleep(max(0.2, base))
+    def random_headers() -> dict:
+        return {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+
+def _headers() -> dict:
+    """Headers novos a cada request (antes era um dict fixo gerado 1x no import e reusado em
+    todas as chamadas da execução inteira, o que anulava boa parte do valor do stealth.random_headers)."""
+    return random_headers()
+
+# Backoff por execução: se uma fonte devolver 429/999, para de bater nela pelo resto da
+# execução em vez de continuar tentando (evita agravar um softban em andamento).
+_RUN_BACKOFF = {}
+
+def _reset_backoff():
+    _RUN_BACKOFF.clear()
+
+def _backoff_active(key: str) -> bool:
+    return _RUN_BACKOFF.get(key, False)
+
+def _trip_backoff(key: str, status_code):
+    if not _RUN_BACKOFF.get(key, False):
+        print(f"[Collector] {key}: recebido {status_code} — pausando esta fonte pelo resto da execução.")
+    _RUN_BACKOFF[key] = True
 
 # --- LinkedIn Posts: sinais de recrutador e de contratação ---
 RECRUITER_SIGNALS = [
@@ -44,7 +66,7 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
     url = f"https://portal.api.gupy.io/api/v1/jobs?jobName={requests.utils.quote(keywords)}&limit={limit}&offset=0"
     
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=_headers(), timeout=10)
         if response.status_code == 200:
             data = response.json()
             results = data.get('data', [])
@@ -73,11 +95,15 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
 def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
     """Coleta vagas públicas do LinkedIn sem necessidade de login."""
     jobs = []
+    if _backoff_active("linkedin"):
+        return jobs
     base_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={requests.utils.quote(keywords)}&location={requests.utils.quote(location)}&start=0"
-    
+
     try:
-        response = requests.get(base_url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
+        response = requests.get(base_url, headers=_headers(), timeout=10)
+        if response.status_code in (429, 999):
+            _trip_backoff("linkedin", response.status_code)
+        elif response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             job_cards = soup.find_all('li')
             
@@ -105,7 +131,7 @@ def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15
                         'description': desc or f"Vaga de {job_title} na empresa {company}.",
                         'contact_email': extract_email(desc)
                     })
-                    time.sleep(1) # Pausa amigável
+                    jitter_sleep(1.0, 0.4) # pausa com variação — ritmo menos robótico
     except Exception as e:
         print(f"[Collector] Erro ao buscar vagas no LinkedIn: {e}")
         
@@ -113,9 +139,13 @@ def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15
 
 def fetch_linkedin_job_details(job_url: str) -> str:
     """Busca o texto completo da descrição de uma vaga do LinkedIn."""
+    if _backoff_active("linkedin"):
+        return ""
     try:
-        response = requests.get(job_url, headers=HEADERS, timeout=8)
-        if response.status_code == 200:
+        response = requests.get(job_url, headers=_headers(), timeout=8)
+        if response.status_code in (429, 999):
+            _trip_backoff("linkedin", response.status_code)
+        elif response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             desc_div = soup.find('div', class_='show-more-less-html__markup')
             if desc_div:
@@ -130,7 +160,7 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     url = f"https://remotive.com/api/remote-jobs?search={requests.utils.quote(keywords)}"
     
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=_headers(), timeout=10)
         if response.status_code == 200:
             data = response.json()
             results = data.get('jobs', [])
@@ -153,68 +183,63 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         
     return jobs
 
-def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas públicas do InfoJobs (scraping leve)."""
+def _scrape_simple_board(keywords: str, limit: int, url_template: str, base_domain: str,
+                          card_selectors: str, find_title, company_name: str, platform: str) -> List[Dict]:
+    """Scraping genérico para sites de vaga sem API (seletores CSS 'chutados', sem contrato
+    estável) — InfoJobs e Catho tinham o mesmo laço copiado/colado; só difere URL/seletores/
+    como acha o título. Ajuda a saber quando um seletor quebrou: loga quando dá 0 resultado."""
     jobs = []
-    url = f"https://www.infojobs.com.br/empregos.aspx?palavra={requests.utils.quote(keywords)}"
+    url = url_template.format(kw=requests.utils.quote(keywords))
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=_headers(), timeout=10)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
-            cards = soup.select("div.element-vaga, article.vaga, div.card-vaga")[:limit]
+            cards = soup.select(card_selectors)[:limit]
             for card in cards:
-                title_el = card.find(["h2","h3","a"], class_=re.compile(r"title|vaga", re.I)) or card.find("a")
-                company_el = card.find(string=re.compile(r"Empresa", re.I))
-                # fallback genérico
+                title_el = find_title(card)
                 title = title_el.get_text(strip=True) if title_el else keywords.title()
-                company = "InfoJobs"
                 link_el = card.find("a", href=True)
                 job_url = link_el["href"] if link_el else url
-                if job_url and job_url.startswith("/"): job_url = "https://www.infojobs.com.br" + job_url
+                if job_url and job_url.startswith("/"):
+                    job_url = base_domain + job_url
                 desc = card.get_text(separator=' ', strip=True)[:800]
                 jobs.append({
                     'title': title[:90],
-                    'company': company,
+                    'company': company_name,
                     'location': "Brasil",
                     'url': job_url,
-                    'platform': 'infojobs',
+                    'platform': platform,
                     'description': desc,
                     'contact_email': extract_email(desc)
                 })
                 time.sleep(0.5)
     except Exception as e:
-        print(f"[Collector] InfoJobs erro: {e}")
+        print(f"[Collector] {company_name} erro: {e}")
+    if not jobs:
+        print(f"[Collector][{company_name}] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
+
+def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas públicas do InfoJobs (scraping leve)."""
+    return _scrape_simple_board(
+        keywords, limit,
+        url_template="https://www.infojobs.com.br/empregos.aspx?palavra={kw}",
+        base_domain="https://www.infojobs.com.br",
+        card_selectors="div.element-vaga, article.vaga, div.card-vaga",
+        find_title=lambda card: card.find(["h2","h3","a"], class_=re.compile(r"title|vaga", re.I)) or card.find("a"),
+        company_name="InfoJobs", platform="infojobs",
+    )
 
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas da Catho."""
-    jobs = []
-    url = f"https://www.catho.com.br/vagas/?q={requests.utils.quote(keywords)}"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            cards = soup.select("li.BoxVaga, div.vaga, article")[:limit]
-            for card in cards:
-                title_el = card.find(["h2","h3"]) or card.find("a", class_=re.compile(r"title", re.I))
-                title = title_el.get_text(strip=True) if title_el else keywords.title()
-                link_el = card.find("a", href=True)
-                job_url = link_el["href"] if link_el else url
-                if job_url and job_url.startswith("/"): job_url = "https://www.catho.com.br" + job_url
-                desc = card.get_text(separator=' ', strip=True)[:800]
-                jobs.append({
-                    'title': title[:90],
-                    'company': "Catho",
-                    'location': "Brasil",
-                    'url': job_url,
-                    'platform': 'catho',
-                    'description': desc,
-                    'contact_email': extract_email(desc)
-                })
-                time.sleep(0.5)
-    except Exception as e:
-        print(f"[Collector] Catho erro: {e}")
-    return jobs
+    return _scrape_simple_board(
+        keywords, limit,
+        url_template="https://www.catho.com.br/vagas/?q={kw}",
+        base_domain="https://www.catho.com.br",
+        card_selectors="li.BoxVaga, div.vaga, article",
+        find_title=lambda card: card.find(["h2","h3"]) or card.find("a", class_=re.compile(r"title", re.I)),
+        company_name="Catho", platform="catho",
+    )
 
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas de TI do Programathor (focado em dev)."""
@@ -222,7 +247,7 @@ def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     # Programathor: https://programathor.com.br/jobs?q=python
     url = f"https://programathor.com.br/jobs?q={requests.utils.quote(keywords)}"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=_headers(), timeout=10)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select("div.job, li.job, article.job")[:limit]
@@ -262,6 +287,8 @@ def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
             time.sleep(0.5)
     except Exception as e:
         print(f"[Collector] Programathor erro: {e}")
+    if not jobs:
+        print(f"[Collector][Programathor] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 # ── Helpers para posts de recrutadores ──
@@ -298,7 +325,7 @@ def _extract_company_from_post(post_text: str, author: str) -> str:
 def fetch_linkedin_post_details(post_url: str) -> str:
     """Busca texto completo de um post individual do LinkedIn (guest)."""
     try:
-        resp = requests.get(post_url, headers=HEADERS, timeout=8)
+        resp = requests.get(post_url, headers=_headers(), timeout=8)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             # posts geralmente em divs com data-urn ou article
@@ -322,15 +349,16 @@ def fetch_linkedin_post_details(post_url: str) -> str:
 def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
     """Scraping guest da busca de conteúdo do LinkedIn (sem login)."""
     jobs: List[Dict] = []
+    if _backoff_active("linkedin_post"):
+        return jobs
     # amplia keywords com termo de contratação para melhorar precisão
     expanded = f"{keywords} vaga contratando hiring"
     search_url = f"https://www.linkedin.com/search/results/content/?keywords={requests.utils.quote(expanded)}&origin=GLOBAL_SEARCH_HEADER&sid=jobautofit"
     try:
-        resp = requests.get(search_url, headers=HEADERS, timeout=12)
+        resp = requests.get(search_url, headers=_headers(), timeout=12)
         if resp.status_code in (999, 429):
+            _trip_backoff("linkedin_post", resp.status_code)
             print(f"[Collector][Posts] LinkedIn rate-limit ({resp.status_code}) — tente com login/Playwright ou aguarde.")
-            return jobs
-        if resp.status_code == 999:
             return jobs
         if resp.status_code != 200:
             print(f"[Collector][Posts] Busca guest retornou {resp.status_code}")
@@ -369,7 +397,7 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
             author = ""
             # tenta extrair autor do HTML do post já buscado
             try:
-                r2 = requests.get(url, headers=HEADERS, timeout=8)
+                r2 = requests.get(url, headers=_headers(), timeout=8)
                 s2 = BeautifulSoup(r2.text, 'html.parser')
                 author_el = s2.find('a', class_=re.compile(r'update-components-actor__title|feed-shared-actor__name'))
                 if author_el:
@@ -449,7 +477,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
-            ctx = browser.new_context(user_agent=HEADERS['User-Agent'], locale="pt-BR")
+            ctx = browser.new_context(user_agent=_headers()['User-Agent'], locale="pt-BR")
             page = ctx.new_page()
             print("[Collector][Posts] Playwright: fazendo login no LinkedIn...")
             page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=30000)
@@ -527,6 +555,7 @@ def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]
 def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_per_source: int = 10, enable_linkedin_posts: bool = True, linkedin_posts_limit: int = None) -> List[Dict]:
     """Orquestra a coleta em múltiplas fontes gratuitas."""
     all_jobs = []
+    _reset_backoff()
     if linkedin_posts_limit is None:
         linkedin_posts_limit = limit_per_source
     
@@ -569,7 +598,7 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
             except Exception as e:
                 print(f"[Collector][Posts] Erro geral: {e}")
             # pausa extra para evitar rate-limit no LinkedIn
-            time.sleep(2)
+            jitter_sleep(2.0, 0.6)
         
     print(f"[Collector] Total de vagas coletadas (bruto): {len(all_jobs)}")
     return all_jobs

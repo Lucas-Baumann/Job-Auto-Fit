@@ -3,6 +3,8 @@
 import sys, pathlib, subprocess, os, time
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
+# módulos (config, db, filters...) vivem em src/ desde o reorg — sem isso todo import abaixo falha
+sys.path.insert(0, str(BASE / "src"))
 sys.path.insert(0, str(BASE))
 
 results = {}

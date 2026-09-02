@@ -8,6 +8,7 @@ github_selection.json
 presets.json
 
 # Gerados
+logs/
 output/
 output_github/
 output_github_test/

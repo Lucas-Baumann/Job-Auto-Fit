@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('curriculum_base.json', '.'), ('.env.example', '.'), ('logo.ico', '.')]
 binaries = []
-hiddenimports = ['google.generativeai','plyer','pypdf','docx','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth']
+hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth']
 
 tmp = collect_all('ttkbootstrap')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])

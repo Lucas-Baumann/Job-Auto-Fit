@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import requests
 from pathlib import Path
 from typing import Dict, Tuple
@@ -56,7 +57,10 @@ def call_llm(prompt: str) -> str:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            print(f"[ATS AI] Erro Gemini: {e}. Tentando fallback...")
+            # não existe fallback real para outro provedor aqui — quem chama (evaluate_and_optimize_resume)
+            # recebe "" e usa o heurístico por palavras-chave
+            print(f"[ATS AI] Erro Gemini: {e}. Usando heurístico como fallback.")
+            return ""
     if provider == "openai" and Config.OPENAI_API_KEY:
         return _call_openai_compat(prompt, Config.OPENAI_API_KEY, "https://api.openai.com/v1/chat/completions", "gpt-4o-mini")
     if provider == "claude" and Config.CLAUDE_API_KEY:
@@ -123,11 +127,31 @@ def call_llm(prompt: str) -> str:
             print(f"[ATS AI] Ollama erro: {e}.")
     return ""
 
+def _ats_cache_key(job_title: str, company: str, job_description: str, base_cv: dict) -> str:
+    raw = json.dumps({"t": job_title, "c": company, "d": job_description, "cv": base_cv}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
 def evaluate_and_optimize_resume(job_title: str, company: str, job_description: str, base_cv: dict) -> Tuple[int, str, dict, str]:
     """
     Analisa o grau de compatibilidade e otimiza o curriculo para passar pelos filtros ATS.
     Retorna: (score_0_100, motivo_match, cv_otimizado_dict, carta_de_apresentacao)
     """
+    # cache por hash (vaga+currículo) evita gastar cota gratuita da IA reprocessando a mesma
+    # combinação (ex: reruns/testes) — só cacheia resultado real de IA, não o heurístico (é instantâneo)
+    from db import get_ats_cache, save_ats_cache
+    cache_key = _ats_cache_key(job_title, company, job_description, base_cv)
+    optimized_cv = json.loads(json.dumps(base_cv))  # copia profunda
+    cached = get_ats_cache(cache_key)
+    if cached:
+        if cached.get("optimized_summary"):
+            optimized_cv["summary"] = cached["optimized_summary"]
+        if cached.get("optimized_skills"):
+            try:
+                optimized_cv["skills"] = json.loads(cached["optimized_skills"])
+            except Exception:
+                pass
+        return cached["score"], cached["reason"], optimized_cv, cached.get("cover_letter") or ""
+
     # Carrega contexto das skills_ia (se existir no .exe ou no sistema de arquivos)
     skills_context = load_skills_context()
     prompt = f"""
@@ -161,10 +185,9 @@ Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de codigo):
 }}
 """
     response_text = call_llm(prompt)
-    
+
     score = 50
     reason = "Análise preliminar realizada."
-    optimized_cv = json.loads(json.dumps(base_cv)) # copia profunda
     cover_letter = f"Prezada equipe da {company},\n\nTenho grande interesse na vaga de {job_title}. Anexo meu curriculo para apreciação.\n\nAtenciosamente,\n{base_cv.get('personal_info', {}).get('name')}"
 
     if response_text:
@@ -172,15 +195,21 @@ Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de codigo):
             # Limpar formatação markdown se houver
             clean_json = response_text.replace("```json", "").replace("```", "").strip()
             parsed = json.loads(clean_json)
-            
+
             score = parsed.get("match_score", 50)
             reason = parsed.get("match_reason", reason)
-            if "optimized_summary" in parsed:
-                optimized_cv["summary"] = parsed["optimized_summary"]
-            if "optimized_skills" in parsed:
-                optimized_cv["skills"] = parsed["optimized_skills"]
+            optimized_summary = parsed.get("optimized_summary", "")
+            optimized_skills = parsed.get("optimized_skills", [])
+            if optimized_summary:
+                optimized_cv["summary"] = optimized_summary
+            if optimized_skills:
+                optimized_cv["skills"] = optimized_skills
             if "cover_letter" in parsed:
                 cover_letter = parsed["cover_letter"]
+            try:
+                save_ats_cache(cache_key, score, reason, optimized_summary, json.dumps(optimized_skills, ensure_ascii=False), cover_letter)
+            except Exception as e:
+                print(f"[ATS AI] Falha ao salvar cache: {e}")
         except Exception as e:
             print(f"[ATS AI] Falha ao ler resposta JSON da IA: {e}")
     else:

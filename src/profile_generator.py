@@ -14,6 +14,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 from config import Config
 from ats_optimizer import call_llm
+from logutil import log_print
+
+def _parse_llm_json(resp: str) -> dict:
+    """Extrai o objeto JSON da resposta da IA. Modelos gratuitos/pequenos costumam envolver o
+    JSON em texto explicativo mesmo quando instruídos a não fazer isso — um json.loads() direto
+    quebra nesse caso (era o que acontecia aqui antes, e o erro só ia pro console, que nem
+    existe no .exe sem janela — a IA falhava silenciosamente e caía pro heurístico genérico)."""
+    clean = resp.replace("```json", "").replace("```", "").strip()
+    start = clean.find("{")
+    end = clean.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        clean = clean[start:end + 1]
+    return json.loads(clean)
 
 TEMPLATE = """<div align="center">
 
@@ -215,6 +228,8 @@ def generate_profile_readme(username: str, curriculum: dict, old_readme: str = "
     experience_line = "GaussFleet (2026–Atual) • Autônomo Front-end (2024–2026) • ITShare Analista/Estagiário (2022–2024) • Brasil Couros (2020–2022)"
     projects_sub = "Selecione fork/star nos 3 projetos em destaque — badges for-the-badge garantidos via shields.io"
 
+    llm_used = False
+    llm_error = None
     if use_llm and (Config.OPENROUTER_API_KEY or Config.GEMINI_API_KEY or Config.OPENAI_API_KEY):
         try:
             prompt = f"""
@@ -234,14 +249,19 @@ Sem markdown, apenas JSON.
 """
             resp = call_llm(prompt)
             if resp:
-                clean = resp.replace("```json","").replace("```","").strip()
-                data = json.loads(clean)
+                data = _parse_llm_json(resp)
                 typing_lines = data.get("typing_lines", typing_lines)
                 bio_line = data.get("bio_line", bio_line)
                 experience_line = data.get("experience_line", experience_line)
                 projects_sub = data.get("projects_sub", projects_sub)
+                llm_used = True
+            else:
+                llm_error = "IA não retornou resposta (call_llm veio vazio — ver logs/jobautofit.log)"
         except Exception as e:
-            print(f"[Profile] LLM falhou, usando heurístico: {e}")
+            llm_error = str(e)
+            log_print(f"[Profile] LLM falhou, usando heurístico: {e}")
+    elif use_llm:
+        llm_error = "Nenhuma chave de IA configurada (Gemini/OpenAI/OpenRouter)"
 
     pinfo = curriculum.get("personal_info",{})
     md = TEMPLATE.format(
@@ -259,7 +279,7 @@ Sem markdown, apenas JSON.
         phone=pinfo.get("phone","(00) 00000-0000"),
         bio_line=bio_line
     )
-    info = {"public_repos": public_repos, "followers": followers, "total_stars": total_stars, "skillicons": skillicons, "repos_analyzed": len(repos)}
+    info = {"public_repos": public_repos, "followers": followers, "total_stars": total_stars, "skillicons": skillicons, "repos_analyzed": len(repos), "llm_used": llm_used, "llm_error": llm_error}
     return md, info
 
 def write_profile_output(username: str, markdown: str, workflow: str = ""):
@@ -345,30 +365,36 @@ def generate_repo_readme(username: str, repo: str, curriculum: dict, old_readme:
     description = repo_data.get("description") or f"Projeto {repo} — {repo_data.get('language','')}"
     language_main = repo_data.get("language") or (langs[0] if langs else "JavaScript")
     stars = repo_data.get("stargazers_count", 0)
+    topics = repo_data.get("topics") or []
 
-    # heurística install/usage por linguagem
+    # heurística install/usage por linguagem (só o comando — não inventa framework/lib que o
+    # repo pode nem usar, como acontecia antes ao assumir "React Native / Expo" pra qualquer JS/TS)
     lang_low = language_main.lower() if language_main else ""
-    if "typescript" in lang_low or "javascript" in lang_low or "react" in lang_low:
-        install_cmd = "npm install\nnpm run dev"
-        usage_cmd = "npm start"
-        stack_bullets = "- React Native / Expo / TypeScript\n- Navegação + AsyncStorage\n- Estilo dark tokyonight"
+    if "typescript" in lang_low or "javascript" in lang_low:
+        install_cmd = "npm install"
+        usage_cmd = "npm run dev  # ou npm start, conforme o script definido no package.json"
     elif "python" in lang_low:
         install_cmd = "pip install -r requirements.txt"
-        usage_cmd = "python main.py --help  # ou python gui.py"
-        stack_bullets = "- Python 3.11+\n- Requests / BeautifulSoup / ReportLab\n- ttkbootstrap dark"
+        usage_cmd = "python main.py"
     elif "php" in lang_low:
         install_cmd = "composer install"
-        usage_cmd = "php artisan serve"
-        stack_bullets = "- PHP / Laravel\n- MySQL\n- Blade + Tailwind"
+        usage_cmd = "php artisan serve  # ou php -S localhost:8000"
     else:
-        install_cmd = "git clone https://github.com/{u}/{r}.git\ncd {r}".format(u=username, r=repo)
+        install_cmd = f"git clone https://github.com/{username}/{repo}.git\ncd {repo}"
         usage_cmd = "veja docs/"
-        stack_bullets = f"- {language_main}\n- Git + GitHub\n- CI via Actions"
+
+    # stack a partir das linguagens reais do repo (API languages), não de um chute fixo por linguagem principal
+    stack_items = list(langs[:5]) if langs else ([language_main] if language_main else [])
+    stack_bullets = "\n".join(f"- {s}" for s in stack_items) if stack_items else f"- {language_main or 'Ver repositório'}"
 
     badges = f"[![Stars](https://img.shields.io/github/stars/{username}/{repo}?style=flat&color=00BC8C)](https://github.com/{username}/{repo}) [![Language](https://img.shields.io/github/languages/top/{username}/{repo}?color=00BC8C)](https://github.com/{username}/{repo}) [![Last Commit](https://img.shields.io/github/last-commit/{username}/{repo}?color=00BC8C)](https://github.com/{username}/{repo}/commits)"
-    features = "- Funcionalidade principal descrita com clareza\n- Código limpo + dark theme\n- Pronto para portfolio"
+    # sem IA, usa topics do GitHub (se o repo tiver) em vez de frases genéricas tipo "pronto para portfolio"
+    features = ("\n".join(f"- {t.replace('-', ' ').replace('_', ' ').capitalize()}" for t in topics[:5])
+                if topics else "- Ver código-fonte do repositório para detalhes de funcionalidades")
     sub_extra = ""
 
+    llm_used = False
+    llm_error = None
     if use_llm and (Config.OPENROUTER_API_KEY or Config.GEMINI_API_KEY or Config.OPENAI_API_KEY):
         try:
             prompt = f"""
@@ -378,6 +404,7 @@ REPO: {username}/{repo}
 DESCRIÇÃO ATUAL: {description}
 LINGUAGEM PRINCIPAL: {language_main}
 LINGUAGENS: {langs}
+TOPICS/TAGS: {topics}
 README ANTIGO (800 chars):
 {old_readme[:800]}
 
@@ -390,19 +417,24 @@ Sem markdown, apenas JSON.
 """
             resp = call_llm(prompt)
             if resp:
-                clean = resp.replace("```json","").replace("```","").strip()
-                data = json.loads(clean)
+                data = _parse_llm_json(resp)
                 description = data.get("description", description)
                 features = data.get("features", features)
                 stack_bullets = data.get("stack_bullets", stack_bullets)
                 install_cmd = data.get("install_cmd", install_cmd)
                 usage_cmd = data.get("usage_cmd", usage_cmd)
                 sub_extra = data.get("sub_extra", "")
+                llm_used = True
+            else:
+                llm_error = "IA não retornou resposta (call_llm veio vazio — ver logs/jobautofit.log)"
         except Exception as e:
-            print(f"[Repo] LLM falhou {repo}: {e}")
+            llm_error = str(e)
+            log_print(f"[Repo] LLM falhou {repo}: {e}")
+    elif use_llm:
+        llm_error = "Nenhuma chave de IA configurada (Gemini/OpenAI/OpenRouter)"
 
     md = REPO_TEMPLATE.format(repo_name=repo, badges=badges, description=description, stack_bullets=stack_bullets, features=features, install_cmd=install_cmd, usage_cmd=usage_cmd, sub_extra=sub_extra)
-    info = {"repo": repo, "language": language_main, "stars": stars, "has_old": bool(old_readme), "langs": langs}
+    info = {"repo": repo, "language": language_main, "stars": stars, "has_old": bool(old_readme), "langs": langs, "llm_used": llm_used, "llm_error": llm_error}
     return md, info
 
 def write_repo_output(username: str, repo: str, markdown: str) -> str:
@@ -412,7 +444,7 @@ def write_repo_output(username: str, repo: str, markdown: str) -> str:
     path.write_text(markdown, encoding="utf-8")
     return str(path)
 
-def _git_push_file(username: str, repo: str, token: str, file_content: str, target_path: str, commit_msg: str, extra_files: Dict[str,str]=None) -> str:
+def _git_push_file(username: str, repo: str, token: str, file_content: str, target_path: str, commit_msg: str, extra_files: Dict[str,str]=None, author_name: str = None, author_email: str = None) -> str:
     """Clona repo, sobrescreve arquivo, commit e push. Retorna mensagem."""
     if not token:
         raise ValueError("GITHUB_TOKEN não informado — crie em github.com/settings/tokens (classic, scope repo)")
@@ -424,9 +456,12 @@ def _git_push_file(username: str, repo: str, token: str, file_content: str, targ
         clone_url = f"https://{token}@github.com/{username}/{repo}.git"
         # clone shallow
         subprocess.run(["git","clone","--depth","1",clone_url, tmpdir], check=True, capture_output=True, text=True, timeout=30)
-        # configura git
-        subprocess.run(["git","-C",tmpdir,"config","user.name","JobAutoFit"], check=True)
-        subprocess.run(["git","-C",tmpdir,"config","user.email","jobautofit@local"], check=True)
+        # identidade do commit: nome/e-mail do próprio usuário (currículo) em vez de um nome
+        # genérico de "bot" — assim o commit aparece com a autoria real no histórico do GitHub
+        git_name = author_name or username
+        git_email = author_email or f"{username}@users.noreply.github.com"
+        subprocess.run(["git","-C",tmpdir,"config","user.name",git_name], check=True)
+        subprocess.run(["git","-C",tmpdir,"config","user.email",git_email], check=True)
         # escreve arquivo principal
         dest = Path(tmpdir) / target_path
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -457,11 +492,11 @@ def _git_push_file(username: str, repo: str, token: str, file_content: str, targ
         try: shutil.rmtree(tmpdir, ignore_errors=True)
         except: pass
 
-def push_profile_readme(username: str, token: str, markdown: str, workflow: str = None) -> str:
+def push_profile_readme(username: str, token: str, markdown: str, workflow: str = None, author_name: str = None, author_email: str = None) -> str:
     extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)} if workflow is None else {}
     # workflow já está em SNAKE_WORKFLOW, sempre inclui
     extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)}
-    return _git_push_file(username, username, token, markdown, "README.md", "docs: atualiza README perfil via JobAutoFit", extra_files=extra)
+    return _git_push_file(username, username, token, markdown, "README.md", "docs: atualiza README perfil via JobAutoFit", extra_files=extra, author_name=author_name, author_email=author_email)
 
-def push_repo_readme(username: str, repo: str, token: str, markdown: str) -> str:
-    return _git_push_file(username, repo, token, markdown, "README.md", f"docs: atualiza README via JobAutoFit — {repo}")
+def push_repo_readme(username: str, repo: str, token: str, markdown: str, author_name: str = None, author_email: str = None) -> str:
+    return _git_push_file(username, repo, token, markdown, "README.md", f"docs: atualiza README via JobAutoFit — {repo}", author_name=author_name, author_email=author_email)

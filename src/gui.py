@@ -6,6 +6,10 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
+from config import Config
+
+OUTCOME_OPTIONS = ["sem_resposta", "visualizado", "entrevista", "teste_tecnico", "proposta", "rejeitado", "contratado"]
+
 class Tooltip:
     """Tooltip simples ao passar mouse em ícone ⓘ"""
     def __init__(self, widget, text):
@@ -34,12 +38,15 @@ def info_icon(parent, tooltip_text):
     Tooltip(lbl, tooltip_text)
     return lbl
 
-BASE_DIR = Path(__file__).resolve().parent
-CURRICULUM_PATH = BASE_DIR / "curriculum_base.json"
+# BASE_DIR vem de Config (mesma detecção de .exe/_MEIPASS usada no resto do projeto) — antes a
+# GUI calculava seu próprio BASE_DIR sem essa lógica e ficava com caminhos errados (apontando
+# para a pasta temporária de extração) quando rodando como .exe congelado.
+BASE_DIR = Config.BASE_DIR
+CURRICULUM_PATH = Config.CURRICULUM_PATH
 ENV_PATH = BASE_DIR / ".env"
 ENV_EXAMPLE = BASE_DIR / ".env.example"
-SEARCH_CONFIG_PATH = BASE_DIR / "search_config.json"
-DB_PATH = BASE_DIR / "jobs.db"
+SEARCH_CONFIG_PATH = Config.SEARCH_CONFIG_PATH
+DB_PATH = Config.DB_PATH
 
 def load_curriculum():
     if CURRICULUM_PATH.exists():
@@ -71,7 +78,7 @@ def load_search_config():
     if SEARCH_CONFIG_PATH.exists():
         try: return json.loads(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
         except: pass
-    return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"favorite_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"telegram_bot_token":"","telegram_chat_id":"","schedule_enabled":False,"schedule_hour":"08:00","enable_linkedin_posts":True,"linkedin_posts_limit":8}
+    return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"favorite_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"telegram_bot_token":"","telegram_chat_id":"","schedule_enabled":False,"schedule_hour":"08:00","enable_linkedin_posts":True,"linkedin_posts_limit":8,"auto_send":True}
 def save_search_config(c): SEARCH_CONFIG_PATH.write_text(json.dumps(c,ensure_ascii=False,indent=2),encoding="utf-8")
 
 class App(tb.Window):
@@ -80,6 +87,12 @@ class App(tb.Window):
         self.title("JobAutoFit — Automação Completa (Gupy / LinkedIn / ATS)")
         self.geometry("1280x820"); self.minsize(1200,750)
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
+        try:
+            # garante que jobs.db exista com o schema atual (colunas/tabelas novas) antes de
+            # qualquer leitura do Dashboard/Histórico — antes só main.py chamava init_db()
+            from db import init_db as _init_db
+            _init_db()
+        except Exception: pass
         # vars perfil
         self.var_name=tk.StringVar(value=self.curriculum.get("personal_info",{}).get("name",""))
         self.var_email=tk.StringVar(value=self.curriculum.get("personal_info",{}).get("email",""))
@@ -124,6 +137,7 @@ class App(tb.Window):
         self.var_only_pcd=tk.BooleanVar(value=self.search_cfg.get("only_pcd",False))
         self.var_english=tk.StringVar(value=self.search_cfg.get("english_filter","indiferente"))
         self.var_daily_limit=tk.IntVar(value=self.search_cfg.get("daily_limit",20))
+        self.var_auto_send=tk.BooleanVar(value=self.search_cfg.get("auto_send",True))
         self.var_telegram_token=tk.StringVar(value=self.search_cfg.get("telegram_bot_token",self.env.get("TELEGRAM_BOT_TOKEN","")))
         self.var_telegram_chat=tk.StringVar(value=self.search_cfg.get("telegram_chat_id",self.env.get("TELEGRAM_CHAT_ID","")))
         self.var_schedule_enabled=tk.BooleanVar(value=self.search_cfg.get("schedule_enabled",False))
@@ -356,6 +370,9 @@ class App(tb.Window):
         tb.Label(row,text="Score mínimo %").pack(side=LEFT,padx=5); tb.Scale(row,from_=0,to=100,variable=self.var_min_score,length=200,bootstyle="success").pack(side=LEFT,padx=5); tb.Label(row,textvariable=self.var_min_score,width=4).pack(side=LEFT)
         tb.Label(row,text="Vagas/fonte").pack(side=LEFT,padx=(20,5)); tb.Spinbox(row,from_=1,to=30,textvariable=self.var_limit,width=6).pack(side=LEFT)
         info_icon(row, "Vagas por fonte (Gupy/LinkedIn/Remotive).\n>12 por fonte = risco de 429/softban. Recomendado: 8-10.\nO LinkedIn Jobs Guest bloqueia com muitas req/seg.").pack(side=LEFT)
+        row_send=tb.Frame(card3); row_send.pack(fill=X,pady=(6,0))
+        tb.Checkbutton(row_send,text="Enviar automaticamente quando o match atingir o score mínimo",variable=self.var_auto_send,bootstyle="round-toggle").pack(side=LEFT,padx=5)
+        info_icon(row_send, "Desative para revisar antes de enviar: vagas com match suficiente ficam com status 'ready_to_send'\n(PDF + carta já prontos) na aba Histórico, e você aprova o envio manualmente no botão\n'Aprovar e Enviar'. Recomendado se não quiser confiar 100% na IA em candidaturas reais.").pack(side=LEFT)
         # LinkedIn posts de recrutadores
         card_posts=tb.Labelframe(inner,text="LinkedIn — Posts de Recrutadores (nova fonte)",padding=10,bootstyle="warning"); card_posts.pack(fill=X,pady=5)
         row_posts=tb.Frame(card_posts); row_posts.pack(fill=X)
@@ -624,24 +641,46 @@ class App(tb.Window):
         except Exception as e: messagebox.showerror("Preview",str(e))
     def run_automation(self):
         if not self.var_name.get().strip(): messagebox.showwarning("Validação","Informe nome"); self.nb.select(self.tab_perfil); return
-        self.save_all(silent=True); self.btn_run.config(state=DISABLED); self.btn_stop.config(state=NORMAL); self.progress.start(12); self._log("\n=== Iniciando ===")
+        self.save_all(silent=True); self.btn_run.config(state=DISABLED); self.progress.start(12); self._log("\n=== Iniciando ===")
         kws=[k.strip() for k in self.var_keywords.get().split(",") if k.strip()] or ["Desenvolvedor Python"]
         loc="Brasil" if self.var_work_mode.get()=="remoto" else (self.var_presencial_loc.get().strip() or "Brasil")
-        cmd=[sys.executable,str(BASE_DIR/"main.py"),"--keywords",*kws,"--location",loc,"--min-score",str(int(self.var_min_score.get()))]
-        if self.var_dry_run.get(): cmd.append("--dry-run")
-        self._log(f"Comando: {' '.join(cmd)}"); self.proc=None; self.stop_requested=False
+        min_score=int(self.var_min_score.get()); dry_run=bool(self.var_dry_run.get())
+        self.proc=None; self.stop_requested=False
+        # No .exe congelado não existe python/main.py separado para chamar via subprocess (o .exe
+        # empacota só a GUI) — nesse caso roda o pipeline no mesmo processo em vez de subprocess.
+        frozen=bool(getattr(sys,'frozen',False))
+        self.btn_stop.config(state=DISABLED if frozen else NORMAL)
         def target():
             try:
-                self.proc=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="replace",cwd=str(BASE_DIR))
-                for line in self.proc.stdout:
-                    if self.stop_requested:
-                        try: self.proc.terminate()
-                        except: pass
-                        break
-                    self._log(line.rstrip())
-                self.proc.wait()
-                self._log("\n=== Finalizado ===" if not self.stop_requested else "\n=== Parado ===")
-            except Exception as e: self._log(str(e))
+                if frozen:
+                    self._log("[.exe] Rodando automação no mesmo processo (botão Parar não disponível neste modo).")
+                    from main import run_pipeline
+                    import contextlib
+                    class _LogStream:
+                        def __init__(self, log_fn): self.log_fn=log_fn; self._buf=""
+                        def write(self, s):
+                            self._buf+=s
+                            while "\n" in self._buf:
+                                line, self._buf = self._buf.split("\n",1)
+                                self.log_fn(line)
+                        def flush(self): pass
+                    with contextlib.redirect_stdout(_LogStream(self._log)):
+                        run_pipeline(kws, loc, min_score, dry_run=dry_run)
+                    self._log("\n=== Finalizado ===")
+                else:
+                    cmd=[sys.executable,str(BASE_DIR/"main.py"),"--keywords",*kws,"--location",loc,"--min-score",str(min_score)]
+                    if dry_run: cmd.append("--dry-run")
+                    self._log(f"Comando: {' '.join(cmd)}")
+                    self.proc=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="replace",cwd=str(BASE_DIR))
+                    for line in self.proc.stdout:
+                        if self.stop_requested:
+                            try: self.proc.terminate()
+                            except: pass
+                            break
+                        self._log(line.rstrip())
+                    self.proc.wait()
+                    self._log("\n=== Finalizado ===" if not self.stop_requested else "\n=== Parado ===")
+            except Exception as e: self._log(f"[Erro] {e}")
             finally: self.progress.stop(); self.btn_run.config(state=NORMAL); self.btn_stop.config(state=DISABLED); self._refresh_hist(); self._refresh_dashboard()
         threading.Thread(target=target,daemon=True).start()
     def stop_automation(self):
@@ -674,11 +713,15 @@ class App(tb.Window):
             self.lbl_total.config(text=f"{total} vagas totais"); self.lbl_high.config(text=f"{high} match≥60%"); self.lbl_today.config(text=f"{today} hoje")
             cur.execute("SELECT status, COUNT(*) c FROM jobs GROUP BY status"); rows=cur.fetchall()
             cur.execute("SELECT platform, COUNT(*) c FROM jobs GROUP BY platform"); rows2=cur.fetchall()
+            cur.execute("SELECT outcome, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows3=cur.fetchall()
             con.close()
             txt=f"Por status:\n"
             for r in rows: txt+=f"  {r['status']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             txt+="\nPor plataforma:\n"
             for r in rows2: txt+=f"  {r['platform']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
+            if rows3:
+                txt+="\nPor outcome (marcados manualmente):\n"
+                for r in rows3: txt+=f"  {r['outcome']:<14} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             self.bars_text.delete("1.0",tk.END); self.bars_text.insert("1.0",txt)
         except Exception as e: pass
 
@@ -688,28 +731,75 @@ class App(tb.Window):
         top=tb.Frame(f); top.pack(fill=X,pady=5)
         tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga").pack(side=LEFT,padx=5)
         tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_hist).pack(side=RIGHT,padx=5)
-        cols=("vaga","empresa","local","match","status","plataforma")
+        actions=tb.Frame(f); actions.pack(fill=X,pady=(0,5))
+        tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected).pack(side=LEFT,padx=5)
+        info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side=LEFT)
+        tb.Button(actions,text="📝 Marcar Outcome",bootstyle="info-outline",command=self.mark_job_outcome).pack(side=LEFT,padx=10)
+        info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side=LEFT)
+        cols=("vaga","empresa","local","match","status","outcome","plataforma")
         self.tree=tb.Treeview(f,columns=cols,show="headings",bootstyle="dark",height=14)
         for c in cols: self.tree.heading(c,text=c.capitalize())
-        self.tree.column("vaga",width=260); self.tree.column("empresa",width=160); self.tree.column("local",width=140); self.tree.column("match",width=60,anchor=CENTER); self.tree.column("status",width=110,anchor=CENTER); self.tree.column("plataforma",width=90,anchor=CENTER)
+        self.tree.column("vaga",width=240); self.tree.column("empresa",width=150); self.tree.column("local",width=120); self.tree.column("match",width=55,anchor=CENTER); self.tree.column("status",width=95,anchor=CENTER); self.tree.column("outcome",width=100,anchor=CENTER); self.tree.column("plataforma",width=85,anchor=CENTER)
         self.tree.pack(fill=BOTH,expand=True,pady=5); self.tree.bind("<Double-Button-1>",self._on_hist_dbl); self._refresh_hist()
     def _refresh_hist(self):
         try:
             for i in self.tree.get_children(): self.tree.delete(i)
             if not DB_PATH.exists(): return
             import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
-            cur.execute("SELECT title,company,location,match_score,status,platform FROM jobs ORDER BY id DESC LIMIT 300")
-            for r in cur.fetchall(): self.tree.insert("",tk.END,values=(r["title"],r["company"],r["location"],f"{r['match_score'] or 0}%",r["status"],r["platform"]))
+            cur.execute("SELECT id,title,company,location,match_score,status,outcome,platform FROM jobs ORDER BY id DESC LIMIT 300")
+            for r in cur.fetchall():
+                self.tree.insert("",tk.END,iid=str(r["id"]),values=(r["title"],r["company"],r["location"],f"{r['match_score'] or 0}%",r["status"],r["outcome"] or "-",r["platform"]))
             con.close()
         except: pass
     def _on_hist_dbl(self,ev):
         sel=self.tree.selection()
         if not sel: return
         try:
-            import sqlite3; con=sqlite3.connect(str(DB_PATH)); cur=con.cursor(); idx=self.tree.index(sel[0]); cur.execute("SELECT url FROM jobs ORDER BY id DESC LIMIT 1 OFFSET ?",(idx,)); row=cur.fetchone()
-            if row and row[0]: webbrowser.open(row[0])
+            import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT url FROM jobs WHERE id=?",(int(sel[0]),)); row=cur.fetchone()
+            if row and row["url"]: webbrowser.open(row["url"])
             con.close()
         except: pass
+    def approve_and_send_selected(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showinfo("Aprovar e Enviar","Selecione uma vaga na lista."); return
+        job_id=int(sel[0])
+        try:
+            import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT * FROM jobs WHERE id=?",(job_id,)); row=cur.fetchone(); con.close()
+        except Exception as e: messagebox.showerror("Aprovar e Enviar",str(e)); return
+        if not row: messagebox.showwarning("Aprovar e Enviar","Vaga não encontrada."); return
+        if row["status"]!="ready_to_send":
+            messagebox.showinfo("Aprovar e Enviar",f"Status atual: '{row['status']}'.\nSó é possível aprovar vagas com status 'ready_to_send' (aguardando revisão)."); return
+        cover_text=""
+        try:
+            if row["cover_letter_path"] and Path(row["cover_letter_path"]).exists():
+                cover_text=Path(row["cover_letter_path"]).read_text(encoding="utf-8")
+        except Exception: pass
+        try:
+            from sender import apply_to_job
+            from db import update_job_status
+            status=apply_to_job(dict(row), row["resume_pdf_path"] or "", cover_text)
+            update_job_status(job_id, status)
+            messagebox.showinfo("Aprovar e Enviar",f"{row['title']} @ {row['company']} → status: {status}")
+            self._refresh_hist(); self._refresh_dashboard()
+        except Exception as e: messagebox.showerror("Aprovar e Enviar",str(e))
+    def mark_job_outcome(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showinfo("Outcome","Selecione uma vaga na lista."); return
+        job_id=int(sel[0])
+        top=tb.Toplevel(self); top.title("Atualizar Outcome"); top.geometry("360x150"); top.transient(self); top.grab_set()
+        tb.Label(top,text="Resultado real da candidatura:").pack(anchor=W,padx=10,pady=(12,4))
+        var_outcome=tk.StringVar(value="sem_resposta")
+        tb.Combobox(top,textvariable=var_outcome,values=OUTCOME_OPTIONS,state="readonly").pack(fill=X,padx=10)
+        def save():
+            try:
+                from db import update_job_outcome
+                update_job_outcome(job_id, var_outcome.get())
+                self._refresh_hist(); self._refresh_dashboard()
+            except Exception as e: messagebox.showerror("Outcome",str(e))
+            top.destroy()
+        tb.Button(top,text="Salvar",bootstyle="success",command=save).pack(pady=12)
 
     # Perfil GitHub
     def _build_profile(self):
@@ -754,6 +844,18 @@ class App(tb.Window):
             if sel_path.exists(): self.repos_starred=set(json.loads(sel_path.read_text(encoding="utf-8")))
         except: pass
 
+    def _author_name(self) -> str:
+        name = self.curriculum.get("personal_info",{}).get("name","").strip()
+        placeholder = name.lower() in ("", "nome completo")
+        return self.var_profile_user.get().strip() if placeholder else name
+
+    def _author_email(self) -> str:
+        email = self.curriculum.get("personal_info",{}).get("email","").strip()
+        if email and email.lower() != "seu@email.com" and "@" in email:
+            return email
+        user = self.var_profile_user.get().strip()
+        return f"{user}@users.noreply.github.com" if user else "jobautofit@users.noreply.github.com"
+
     def analyze_profile(self):
         user=self.var_profile_user.get().strip()
         if not user: messagebox.showwarning("Perfil","Informe username"); return
@@ -786,7 +888,8 @@ class App(tb.Window):
             old=fetch_old_readme(user)
             md, info = generate_profile_readme(user, self.curriculum, old, use_llm=use_llm)
             path=write_profile_output(user, md)
-            self.txt_profile_log.insert(tk.END,f"  ✓ Gerado em {path}\n  Repos: {info['public_repos']} | Estrelas: {info['total_stars']} | Skillicons: {info['skillicons']}\n")
+            ia_txt = "IA ✓" if info.get("llm_used") else f"heurístico — {info.get('llm_error') or 'IA desativada'}"
+            self.txt_profile_log.insert(tk.END,f"  ✓ Gerado em {path} ({ia_txt})\n  Repos: {info['public_repos']} | Estrelas: {info['total_stars']} | Skillicons: {info['skillicons']}\n")
             self.txt_profile_log.insert(tk.END,"  Próximo: abra output_github, copie README_<user>.md para seu repo de perfil e snake.yml para .github/workflows/\n")
             # preview no log
             self.txt_profile_log.insert(tk.END,f"\n--- Preview (primeiras 800 chars) ---\n{md[:800]}\n")
@@ -847,25 +950,36 @@ class App(tb.Window):
         self.txt_profile_log.insert(tk.END,f"[⭐] {'+'+repo if repo in self.repos_starred else '-'+repo} | total ⭐: {len(self.repos_starred)}\n"); self.txt_profile_log.see(tk.END)
 
     def generate_selected_repos(self):
+        # log imediato para feedback visual
+        self.txt_profile_log.insert(tk.END, "\n[Repos] Clique detectado — iniciando...\n"); self.txt_profile_log.see(tk.END); self.update_idletasks()
         user=self.var_profile_user.get().strip()
-        if not self.repos_starred: messagebox.showwarning("Repos","Selecione ao menos 1 repo com ⭐ (clique na linha)"); return
+        if not self.repos_starred:
+            messagebox.showwarning("Repos","Selecione ao menos 1 repo com ⭐ (clique na linha)")
+            self.txt_profile_log.insert(tk.END, "  Nenhum repo com ⭐ selecionado — clique na estrela da linha.\n"); self.txt_profile_log.see(tk.END)
+            return
         self.save_all(silent=True)
         use_llm=bool(self.var_profile_use_llm.get())
-        self.txt_profile_log.insert(tk.END,f"\n[Repos] Reformulando {len(self.repos_starred)} repos com IA={'sim' if use_llm else 'não'}...\n"); self.update_idletasks()
+        self.txt_profile_log.insert(tk.END,f"[Repos] Reformulando {len(self.repos_starred)} repos ({', '.join(sorted(self.repos_starred))}) com IA={'sim' if use_llm else 'não'}...\n"); self.txt_profile_log.see(tk.END); self.update_idletasks()
         try:
             from profile_generator import fetch_repo_readme, generate_repo_readme, write_repo_output
+            out_dir = BASE_DIR / "output_github"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            self.txt_profile_log.insert(tk.END, f"  Pasta saída: {out_dir}\n"); self.txt_profile_log.see(tk.END)
             for repo in sorted(self.repos_starred):
-                self.txt_profile_log.insert(tk.END,f"  → {repo} ..."); self.update_idletasks()
+                self.txt_profile_log.insert(tk.END,f"  → {repo} buscando README antigo..."); self.txt_profile_log.see(tk.END); self.update_idletasks()
                 old=fetch_repo_readme(user, repo)
+                self.txt_profile_log.insert(tk.END, f" {'tinha' if old else 'sem'} README, gerando..."); self.txt_profile_log.see(tk.END); self.update_idletasks()
                 md, info = generate_repo_readme(user, repo, self.curriculum, old, use_llm=use_llm)
                 path=write_repo_output(user, repo, md)
                 has = "tinha README" if info["has_old"] else "sem README"
-                self.txt_profile_log.insert(tk.END,f" ✓ {path} ({has}, {info['language']}, {info['langs']})\n")
-                self.txt_profile_log.see(tk.END)
-            messagebox.showinfo("Repos",f"{len(self.repos_starred)} READMEs gerados em output_github/README_<repo>.md\nRevise antes de copiar para cada repo.")
-            self._open_folder(BASE_DIR/"output_github")
+                ia_txt = "IA ✓" if info.get("llm_used") else f"heurístico — {info.get('llm_error') or 'IA desativada'}"
+                self.txt_profile_log.insert(tk.END,f" ✓ {Path(path).name} ({has}, {info['language']}, {ia_txt})\n"); self.txt_profile_log.see(tk.END)
+            self.txt_profile_log.insert(tk.END, f"[Repos] Concluído — {len(self.repos_starred)} arquivos em {out_dir}\n"); self.txt_profile_log.see(tk.END)
+            messagebox.showinfo("Repos",f"{len(self.repos_starred)} READMEs gerados em output_github/README_<repo>.md\nRevise em {out_dir}")
+            self._open_folder(out_dir)
         except Exception as e:
-            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n"); messagebox.showerror("Repos",str(e))
+            import traceback
+            self.txt_profile_log.insert(tk.END,f"Erro: {e}\n{traceback.format_exc()[:800]}\n"); self.txt_profile_log.see(tk.END); messagebox.showerror("Repos",str(e))
 
     def generate_and_push_profile(self):
         user=self.var_profile_user.get().strip()
@@ -885,7 +999,7 @@ class App(tb.Window):
             from profile_generator import write_profile_output
             write_profile_output(user, md)
             self.txt_profile_log.insert(tk.END,"  Gerado local, fazendo push...\n"); self.update_idletasks()
-            msg=push_profile_readme(user, token, md)
+            msg=push_profile_readme(user, token, md, author_name=self._author_name(), author_email=self._author_email())
             self.txt_profile_log.insert(tk.END,f"  ✓ {msg} — https://github.com/{user}/{user}\n")
             messagebox.showinfo("Perfil",f"Push ok em https://github.com/{user}/{user}")
             self.txt_profile_log.see(tk.END)
@@ -911,8 +1025,9 @@ class App(tb.Window):
                 # write local
                 from profile_generator import write_repo_output
                 write_repo_output(user, repo, md)
-                self.txt_profile_log.insert(tk.END," push..."); self.update_idletasks()
-                msg=push_repo_readme(user, repo, token, md)
+                ia_txt = "IA ✓" if info.get("llm_used") else f"heurístico — {info.get('llm_error') or 'IA desativada'}"
+                self.txt_profile_log.insert(tk.END,f" ({ia_txt}) push..."); self.update_idletasks()
+                msg=push_repo_readme(user, repo, token, md, author_name=self._author_name(), author_email=self._author_email())
                 self.txt_profile_log.insert(tk.END,f" {msg}\n"); self.txt_profile_log.see(tk.END)
             messagebox.showinfo("Repos","Push concluído! Verifique no GitHub.")
         except Exception as e:
@@ -924,7 +1039,7 @@ class App(tb.Window):
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
         self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),OPENROUTER_MODEL=self.var_openrouter_model.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
-        cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get())}
+        cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get()),"auto_send":bool(self.var_auto_send.get())}
         save_search_config(cfg); self.search_cfg=cfg
         if not silent: messagebox.showinfo("Salvo","Salvo em curriculum_base.json, .env, search_config.json")
         try: self.log_text.insert(tk.END,"[Save] ok\n"); self.log_text.see(tk.END)
