@@ -1,9 +1,29 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Raiz do projeto é um nível acima de src/
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Raiz do projeto: se empacotado, é pasta do projeto (exe está em dist/), não Temp/_MEI
+if getattr(sys, 'frozen', False):
+    exe_dir = Path(sys.executable).resolve().parent
+    if exe_dir.name.lower() == "dist":
+        BASE_DIR = exe_dir.parent
+    else:
+        BASE_DIR = exe_dir
+    # fallback se ainda cair em Temp/_MEI (PyInstaller onefile extrai para Temp)
+    if "_MEI" in str(BASE_DIR) or "Temp" in str(BASE_DIR):
+        # tenta exe_dir novamente, se ainda for Temp, usa parent do exe
+        try:
+            BASE_DIR = Path(sys.executable).resolve().parent
+            if BASE_DIR.name.lower() == "dist":
+                BASE_DIR = BASE_DIR.parent
+        except:
+            BASE_DIR = Path.cwd()
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    # também corrige caso rodando via python mas com path Temp (raro)
+    if "_MEI" in str(BASE_DIR):
+        BASE_DIR = Path.cwd()
 env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(env_path)
