@@ -44,7 +44,11 @@ cp .env.example .env
 Abra o `.env` e adicione sua chave de IA gratuita do Gemini (ou configure para Ollama se usar IA local).
 
 ### 4. Configurar seu Currículo Base (`curriculum_base.json`)
-Edite o arquivo `curriculum_base.json` com suas informações reais (experiências, formação, habilidades). A IA utilizará este arquivo como fonte da verdade.
+Copie `curriculum_base.example.json` para `curriculum_base.json` e edite com suas informações reais (experiências, formação, habilidades). A IA utilizará este arquivo como fonte da verdade.
+```bash
+cp curriculum_base.example.json curriculum_base.json
+```
+`curriculum_base.json` fica fora do git (está no `.gitignore`) — assim seus dados pessoais nunca vão parar no repositório. Prefira preencher pela GUI (aba 1 → Importar PDF/DOCX ou edição manual) e clicar em "Salvar Tudo".
 
 ---
 

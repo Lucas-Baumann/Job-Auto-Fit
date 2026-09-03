@@ -220,12 +220,12 @@ def generate_profile_readme(username: str, curriculum: dict, old_readme: str = "
 
     # typing lines a partir de curriculum
     pos = curriculum.get("experiences",[{}])[0].get("position","Desenvolvedor")
-    name = curriculum.get("personal_info",{}).get("name","Lucas Baumann")
-    loc = curriculum.get("personal_info",{}).get("location","Lavras-MG")
+    name = curriculum.get("personal_info",{}).get("name","Seu Nome")
+    loc = curriculum.get("personal_info",{}).get("location","Sua Cidade")
     # tenta LLM para bio curta
     typing_lines = f"Desenvolvedor+{pos.replace(' ','+')};TypeScript+|+JavaScript+|+PHP;{loc.replace(' ','+')}+•+Remoto;Construindo+apps+que+usam+de+verdade"
-    bio_line = "Aberto a oportunidades remotas Mobile/Fullstack — vamos conversar?"
-    experience_line = "GaussFleet (2026–Atual) • Autônomo Front-end (2024–2026) • ITShare Analista/Estagiário (2022–2024) • Brasil Couros (2020–2022)"
+    bio_line = "Aberto a oportunidades remotas — vamos conversar?"
+    experience_line = " • ".join(f"{e.get('company','Empresa')} ({e.get('period','')})" for e in curriculum.get("experiences",[])[:4]) or "Empresa Atual • Empresa Anterior"
     projects_sub = "Selecione fork/star nos 3 projetos em destaque — badges for-the-badge garantidos via shields.io"
 
     llm_used = False

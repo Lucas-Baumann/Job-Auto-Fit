@@ -6,6 +6,7 @@ search_config.json
 github_selection.json
 .wizard_done
 presets.json
+curriculum_base.json
 
 # Gerados
 logs/
@@ -22,6 +23,8 @@ __pycache__/
 
 # Testes locais
 tests/fix_log.txt
+tests/test_report.html
+tests/_scratch/
 
 # Playwright
 test-results/

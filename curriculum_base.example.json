@@ -1,0 +1,46 @@
+{
+  "personal_info": {
+    "name": "Nome Completo",
+    "email": "seu@email.com",
+    "phone": "(00) 00000-0000",
+    "location": "Brasil",
+    "linkedin": "https://linkedin.com/in/seu-perfil",
+    "github": "https://github.com/seu-perfil"
+  },
+  "summary": "Desenvolvedor com experiência em Python, APIs REST, Banco de Dados. Foco em automação e soluções eficientes.",
+  "skills": [
+    "Python",
+    "JavaScript",
+    "SQL",
+    "Git",
+    "APIs REST"
+  ],
+  "experiences": [
+    {
+      "company": "Empresa Exemplo",
+      "position": "Desenvolvedor",
+      "period": "2020 - Atual",
+      "highlights": [
+        "Experiência em desenvolvimento de software",
+        "Participação em projetos de automação",
+        "Uso de APIs e banco de dados"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Curso de Tecnologia / Análise de Sistemas",
+      "institution": "Universidade Exemplo",
+      "year": "2020 - 2022"
+    }
+  ],
+  "languages": [
+    "Português",
+    "Inglês"
+  ],
+  "certifications": [],
+  "projects": [
+    "Projeto de exemplo 1",
+    "Projeto de exemplo 2"
+  ]
+}

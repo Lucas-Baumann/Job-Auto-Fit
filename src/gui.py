@@ -280,11 +280,11 @@ class App(tb.Window):
                     self.curriculum["skills"]=parsed["skills"]
                 else:
                     self.curriculum["skills"]=list(dict.fromkeys(self.curriculum.get("skills",[])+parsed["skills"]))
-            if parsed.get("summary") and not self.txt_summary.get("1.0","end").strip(): 
+            if parsed.get("summary"):
+                # antes só substituía se o campo estivesse vazio — mas o campo sempre tem o
+                # texto padrão do curriculum_base.json de exemplo, então o resumo extraído do
+                # PDF nunca aparecia (a condição nunca era vazia, e o 'elif' só fazia 'pass')
                 self.txt_summary.delete("1.0",tk.END); self.txt_summary.insert("1.0",parsed["summary"])
-            elif parsed.get("summary"):
-                # se já tem resumo, mostra mas não sobrescreve automaticamente
-                pass
             # experiências e formação (novo)
             if parsed.get("experiences"):
                 self.curriculum["experiences"]=parsed["experiences"]

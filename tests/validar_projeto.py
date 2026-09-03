@@ -7,6 +7,16 @@ BASE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))
 sys.path.insert(0, str(BASE))
 
+# Isola o validador do jobs.db/output/ reais do usuário — antes os testes de DB e ATS escreviam
+# direto no banco e na pasta de produção, poluindo Dashboard/Histórico com vagas de teste
+# ("Validacao"/"Auto") e output/ com PDFs de teste a cada vez que o validador rodava.
+SCRATCH = BASE / "tests" / "_scratch"
+SCRATCH.mkdir(parents=True, exist_ok=True)
+from config import Config
+Config.DB_PATH = SCRATCH / "jobs.db"
+Config.OUTPUT_DIR = SCRATCH / "output"
+Config.OUTPUT_DIR.mkdir(exist_ok=True)
+
 results = {}
 
 def ok(name, msg=""):
