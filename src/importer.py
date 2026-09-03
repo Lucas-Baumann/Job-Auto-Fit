@@ -23,6 +23,13 @@ _ACCENT_MAP = str.maketrans(
     "áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ",
     "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC"
 )
+_DATE_RANGE_RX = re.compile(
+    r"(\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})"
+    r"\s*[–-]\s*"
+    r"(?:Atual|ATUAL|Present|Current|\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})",
+    re.I
+)
+
 def _fold(s: str) -> str:
     """minúsculas + sem acento, preservando o comprimento (1 char -> 1 char) para os índices
     baterem com o texto original. Extração de PDF às vezes perde acentos de forma inconsistente
@@ -36,6 +43,18 @@ def _extract_section(text: str, start_marker: str, end_markers: list) -> str:
     if start == -1:
         return ""
     start += len(start_marker)
+    # se o cabeçalho continua na mesma linha (ex: "COMPETÊNCIAS & HABILIDADES", "COMPETÊNCIAS
+    # TÉCNICAS E TECNOLOGIAS"), o marcador buscado é só um prefixo do título real — pula até a
+    # quebra de linha pra não deixar a sobra ("& Habilidades") vazar pro conteúdo da seção. Mas
+    # se vier ":" logo em seguida (ex: "Skills: Python, SQL"), o conteúdo pode estar colado na
+    # mesma linha — aí só pula o ":" e os espaços, sem descartar a linha inteira.
+    tail = re.match(r"\s*:\s*", text[start:start+10])
+    if tail:
+        start += tail.end()
+    else:
+        nl = text.find("\n", start)
+        if nl != -1:
+            start = nl + 1
     end = len(text)
     # procura end_marker apenas como cabeçalho (início de linha, com ou sem espaços)
     for m in end_markers:
@@ -72,21 +91,39 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # endereço / localização (linha com Endereço)
     m = re.search(r"Endereço:\s*([^\n]+)", text, re.I)
     if m: data["personal_info"]["location"] = m.group(1).strip()
-    # nome: primeira linha não vazia com 2+ palavras e sem @
-    for line in text.splitlines():
-        line=line.strip()
-        if line and len(line.split())>=2 and "@" not in line and len(line)<60:
-            if not any(k in line.lower() for k in ["curriculum","currículo","resumo","objetivo","endereço","contato","e-mail","email"]):
-                # evita linhas de cabeçalho como "HABILIDADES"
-                if len(line) < 40 and line.isupper() and " " in line:
-                    # nome geralmente em maiúsculas no topo
-                    data["personal_info"]["name"]=line.title()
-                    break
-                elif not line.isupper() or " " in line:
-                    # fallback: primeira linha válida
-                    if "name" not in data["personal_info"]:
-                        data["personal_info"]["name"]=line
+    # nome: alguns modelos quebram o nome em uma palavra por linha (ex: "MARIANA\nCOSTA\n
+    # RODRIGUES") — tenta juntar linhas consecutivas de 1 palavra em maiúsculas no topo antes
+    # de cair no caso comum (nome inteiro numa linha só)
+    name_lines = []
+    for line in text.splitlines()[:6]:
+        line = line.strip()
+        if not line:
+            if name_lines: break
+            continue
+        if len(line.split()) == 1 and line.isupper() and 1 < len(line) < 25 and "@" not in line:
+            name_lines.append(line)
+        else:
+            break
+    if len(name_lines) >= 2:
+        data["personal_info"]["name"] = " ".join(name_lines).title()
+    # nome: primeira linha não vazia com 2+ palavras e sem @ (só roda se o caso "1 palavra por
+    # linha" acima não achou nada, senão o título do cargo logo abaixo do nome — também em
+    # maiúsculas — acabava sobrescrevendo o nome já correto)
+    if "name" not in data["personal_info"]:
+        for line in text.splitlines():
+            line=line.strip()
+            if line and len(line.split())>=2 and "@" not in line and len(line)<60:
+                if not any(k in line.lower() for k in ["curriculum","currículo","resumo","objetivo","endereço","contato","e-mail","email"]):
+                    # evita linhas de cabeçalho como "HABILIDADES"
+                    if len(line) < 40 and line.isupper() and " " in line:
+                        # nome geralmente em maiúsculas no topo
+                        data["personal_info"]["name"]=line.title()
                         break
+                    elif not line.isupper() or " " in line:
+                        # fallback: primeira linha válida
+                        if "name" not in data["personal_info"]:
+                            data["personal_info"]["name"]=line
+                            break
     if "name" not in data["personal_info"]:
         # tenta primeira linha
         for line in text.splitlines():
@@ -100,7 +137,7 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # parcial ("COMPETÊNCIAS TÉCNICAS E TECNOLOGIAS", usado nos PDFs que o próprio app gera)
     # pra não cortar o marcador no meio e deixar sobra ("E TECNOLOGIAS") vazando pra dentro
     # do bloco de skills
-    skills_end_markers = ["EXPERIÊNCIA","FORMAÇÃO","RESUMO","PROJETOS","CURSOS","IDIOMA","OBJETIVO","EXPERIENCE","EDUCATION","SUMMARY"]
+    skills_end_markers = ["EXPERIÊNCIA","FORMAÇÃO","RESUMO","PROJETOS","CURSOS","IDIOMA","OBJETIVO","EXPERIENCE","EDUCATION","SUMMARY","CONTATO","IDIOMAS"]
     skills_block = ""
     for alias in ["COMPETÊNCIAS TÉCNICAS E TECNOLOGIAS","COMPETÊNCIAS TÉCNICAS","COMPETÊNCIAS","HABILIDADES","SKILLS"]:
         skills_block = _extract_section(text, alias, skills_end_markers)
@@ -119,9 +156,24 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # lista de tecnologia abaixo — sem isso, áreas como Direito/Administrativo/PowerBI
     # ficavam sempre com skills vazias (nenhum termo delas bate com "python"/"react"/etc.)
     if skills_block:
-        for part in re.split(r"[,;••\n|]", skills_block):
+        # remove linhas que são só um sub-rótulo (ex: "Ferramentas & Conhecimentos Técnicos:")
+        # e tira o prefixo "Rótulo: " de linhas tipo "Linguagens: Python, SQL" — nos dois casos
+        # o rótulo em si não é uma skill, só teria virado uma entrada bagunçada
+        lines_clean = []
+        for l in skills_block.splitlines():
+            l = l.strip()
+            if not l or l.endswith(":"):
+                continue
+            l = re.sub(r"^[^:\n]{2,30}:\s*", "", l)
+            if l:
+                lines_clean.append(l)
+        cleaned_block = "\n".join(lines_clean)
+        for part in re.split(r"[,;••\n|]", cleaned_block):
             p = part.strip(" .-\t")
-            if 2 <= len(p) <= 40 and p.lower() not in ["competências técnicas e tecnologias","habilidades","skills","competências","technical skills"]:
+            # limite maior que o de antes (40->60): listas "Rótulo: Skill1 Skill2 Skill3" sem
+            # vírgula viram um item só (composto) em vez de serem descartadas inteiras por
+            # estourar o tamanho — pior formatado, mas visível e editável, não some
+            if 2 <= len(p) <= 60 and p.lower() not in ["competências técnicas e tecnologias","habilidades","skills","competências","technical skills"]:
                 if p.lower() not in [f.lower() for f in found]:
                     found.append(p)
     for kw in skill_keywords:
@@ -144,7 +196,7 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # summary: tenta vários cabeçalhos comuns (não só "RESUMO PROFISSIONAL" — currículos de
     # outras áreas/idiomas usam "Perfil", "Objetivo", "About", "Summary" etc.)
     summary_block = ""
-    summary_end_markers = ["HABILIDADES","CURSOS","FORMAÇÃO","PROJETOS","EXPERIÊNCIA","IDIOMA","OBJETIVO","EDUCATION","EXPERIENCE","SKILLS"]
+    summary_end_markers = ["HABILIDADES","COMPETÊNCIAS","CURSOS","FORMAÇÃO","PROJETOS","EXPERIÊNCIA","IDIOMA","OBJETIVO","EDUCATION","EXPERIENCE","SKILLS"]
     for alias in ["RESUMO PROFISSIONAL","PERFIL PROFISSIONAL","OBJETIVO PROFISSIONAL","SOBRE MIM","SOBRE","PROFESSIONAL SUMMARY","SUMMARY","PROFILE","OBJECTIVE"]:
         summary_block = _extract_section(text, alias, summary_end_markers)
         if summary_block and len(summary_block) > 20:
@@ -168,7 +220,7 @@ def heuristic_parse_curriculum(text: str) -> dict:
         # fallback
         data["languages"]=["Inglês"]
     # experiences: bloco EXPERIÊNCIA PROFISSIONAL até fim ou FORMAÇÃO etc
-    exp_end_markers = ["FORMAÇÃO","PROJETOS","CURSOS","IDIOMA","EDUCATION","SKILLS","LANGUAGES"]
+    exp_end_markers = ["FORMAÇÃO","PROJETOS","CURSOS","IDIOMA","EDUCATION","SKILLS","LANGUAGES","COMPETÊNCIAS"]
     exp_block = ""
     for alias in ["EXPERIÊNCIA PROFISSIONAL","EXPERIENCIA PROFISSIONAL","HISTÓRICO PROFISSIONAL","EXPERIÊNCIA","PROFESSIONAL EXPERIENCE","WORK EXPERIENCE","EXPERIENCE"]:
         exp_block = _extract_section(text, alias, exp_end_markers)
@@ -190,30 +242,47 @@ def heuristic_parse_curriculum(text: str) -> dict:
         if not headers:
             header_pattern2 = re.compile(r"^(.+?)\s*[–-]\s*(.+?)\s*\|\s*(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4})|ATUAL)", re.MULTILINE)
             headers = list(header_pattern2.finditer(exp_block))
-        # fallback "duas linhas": "Cargo - Empresa" numa linha e o período sozinho na linha
-        # seguinte (formato comum em modelos de currículo de outras áreas) — sem isso, o
-        # próximo fallback (data no fim da MESMA linha) casava só a linha da data, perdendo
-        # cargo/empresa e deixando "position" vazio
+        # fallback "cargo/empresa em linha(s) própria(s) + período sozinho na linha seguinte":
+        # cobre tanto "Cargo - Empresa\nPeríodo" (2 linhas) quanto "Cargo\nEmpresa\nPeríodo"
+        # (3 linhas, cargo e empresa cada um na sua própria linha, formato comum em modelos
+        # de currículo de outras áreas) — sem isso, o próximo fallback (data no fim da MESMA
+        # linha) só casava a linha da data, perdendo cargo/empresa e deixando "position" vazio
         if not headers:
             date_only_rx = re.compile(r"^\s*(\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})\s*[–-]\s*(?:Atual|ATUAL|Present|Current|\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})\s*$", re.I)
-            tmp_headers=[]; prev=None; offset=0
+            tmp_headers=[]; recent=[]; offset=0
             for raw in exp_block.splitlines(keepends=True):
                 line=raw.strip(); line_start=offset; offset+=len(raw)
-                if not line: prev=None; continue
-                if date_only_rx.match(line) and prev:
-                    title, title_start = prev
-                    sep = "–" if "–" in title else (" - " if " - " in title else None)
-                    if sep:
-                        parts = title.rsplit(sep,1)
-                        cargo, empresa = parts[0].strip(), parts[1].strip()
+                if not line:
+                    # quebra de parágrafo: o que vem depois é quase sempre uma nova entrada,
+                    # não continuação da anterior — limpa candidatos acumulados
+                    recent=[]
+                    continue
+                if date_only_rx.match(line) and recent:
+                    if len(recent)>=2:
+                        title, title_start = recent[-2]
+                        comp_line, _ = recent[-1]
+                        cargo, empresa = title, comp_line
                     else:
-                        cargo, empresa = title, ""
+                        title, title_start = recent[-1]
+                        sep = "–" if "–" in title else (" - " if " - " in title else None)
+                        if sep:
+                            parts = title.rsplit(sep,1)
+                            cargo, empresa = parts[0].strip(), parts[1].strip()
+                        else:
+                            cargo, empresa = title, ""
                     tmp_headers.append(Pseudo(title_start, line_start+len(line), (cargo, empresa, line)))
-                    prev=None
-                elif (" - " in line or "–" in line) and len(line)<120 and not date_only_rx.search(line):
-                    prev=(line, line_start)
-                else:
-                    prev=None
+                    recent=[]
+                elif not date_only_rx.match(line):
+                    # só vira candidato a "cargo/empresa" se parecer um rótulo curto — uma
+                    # frase de destaque (bullet/atividade) também costuma ser curta em número
+                    # de palavras, então o critério real é não terminar em "." (frase), a não
+                    # ser que a última "palavra" seja uma sigla curta tipo "S.A."/"Ltda."
+                    ends_like_sentence = line.endswith(".") and len(line.rsplit(" ",1)[-1]) > 5
+                    if len(line) < 80 and len(line.split()) <= 8 and not ends_like_sentence:
+                        recent.append((line, line_start))
+                        recent = recent[-2:]
+                    else:
+                        recent = []
             headers = tmp_headers
         # terceiro fallback: formato sem pipe "Cargo - Empresa Data" (ex: Desenvolvedor Júnior - GaussFleet Maio de 2026 - Atual)
         if not headers:
@@ -304,6 +373,7 @@ def heuristic_parse_curriculum(text: str) -> dict:
                     parts = [p.strip() for p in clean.split("|")]
                     cargo_empresa = parts[0] if len(parts)>=1 else clean
                     sep = "–" if "–" in cargo_empresa else ("-" if " - " in cargo_empresa else None)
+                    company = ""
                     if sep and sep in cargo_empresa:
                         ce_parts = cargo_empresa.split(sep)
                         if len(ce_parts)>=2:
@@ -311,14 +381,27 @@ def heuristic_parse_curriculum(text: str) -> dict:
                             company = ce_parts[1].strip().title()
                         else:
                             position = cargo_empresa.strip().title()
-                            company = parts[1].strip().title() if len(parts)>1 else ""
                     else:
                         position = cargo_empresa.strip().title()
-                        company = parts[1].strip().title() if len(parts)>1 else ""
-                    period = parts[-1].strip() if len(parts)>=3 else (parts[1].strip() if len(parts)==2 else "")
-                    if not re.search(r"\d{2}/\d{4}|20\d{2}|ATUAL", period, re.I):
-                        mdate = re.search(r"(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4}|\d{4})|20\d{2}\s*[–-]\s*(?:ATUAL|20\d{2}))", clean)
-                        if mdate: period = mdate.group(0).strip()
+                    # período: procura um intervalo de datas em qualquer parte após o cargo —
+                    # em layouts de 2 colunas ("Cargo | Empresa" numa coluna, data na outra),
+                    # a extração de texto do PDF costuma colar tudo numa linha só, então o
+                    # período pode vir grudado no fim do nome da empresa (ex: "Empresa Junho
+                    # de 2020 – Atual"). Sem isso, tanto "company" quanto "period" ficavam com
+                    # essa string inteira (empresa + data juntos, sem separar nada)
+                    rest = " | ".join(parts[1:]) if len(parts) > 1 else ""
+                    date_embedded = _DATE_RANGE_RX.search(rest)
+                    if date_embedded:
+                        period = date_embedded.group(0).strip()
+                        if not company:
+                            company = rest[:date_embedded.start()].strip(" |").title()
+                    else:
+                        if not company and len(parts) > 1:
+                            company = parts[1].strip().title()
+                        period = parts[-1].strip() if len(parts)>=3 else (parts[1].strip() if len(parts)==2 else "")
+                        if not re.search(r"\d{2}/\d{4}|20\d{2}|ATUAL", period, re.I):
+                            mdate = re.search(r"(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4}|\d{4})|20\d{2}\s*[–-]\s*(?:ATUAL|20\d{2}))", clean)
+                            if mdate: period = mdate.group(0).strip()
                     current = {"company": company or "Empresa", "position": position, "period": period, "highlights": []}
                 else:
                     if current is not None:
@@ -350,35 +433,57 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # education: bloco FORMAÇÃO ACADÊMICA
     edu_block = ""
     for alias in ["FORMAÇÃO ACADÊMICA","FORMAÇÃO","EDUCAÇÃO","EDUCATION","ACADEMIC BACKGROUND"]:
-        edu_block = _extract_section(text, alias, ["PROJETOS","EXPERIÊNCIA","CURSOS","HABILIDADES","IDIOMA","EXPERIENCE","SKILLS"])
+        edu_block = _extract_section(text, alias, ["PROJETOS","EXPERIÊNCIA","CURSOS","HABILIDADES","COMPETÊNCIAS","IDIOMA","EXPERIENCE","SKILLS"])
         if edu_block:
             break
     if edu_block:
         # ex: Tecnólogo em Análise e Desenvolvimento de Sistemas\nCentro Universitário Unilavras – Conclusão: 2022
-        lines = [l.strip() for l in edu_block.splitlines() if l.strip()]
-        degree = lines[0] if lines else ""
-        institution = ""
-        year = ""
-        # procura instituição e ano
-        for l in lines[1:]:
-            if re.search(r"20\d{2}", l):
-                # extrai ano
-                my = re.search(r"20\d{2}", l)
-                if my: year = my.group(0)
-                # instituição é antes do "–" ou "Conclusão"
-                if "–" in l:
-                    institution = l.split("–")[0].strip()
-                elif "conclusão" in l.lower():
-                    # pega antes de "–" ou "conclusão"
-                    institution = re.sub(r"–.*|conclusão.*", "", l, flags=re.I).strip()
+        lines_all = [l for l in edu_block.splitlines()]
+        # quebra o bloco em uma entrada por linha que começa com palavra-chave de qualificação
+        # — sem isso só a primeira formação era capturada, perdendo qualquer segunda
+        # graduação/curso listado no mesmo currículo (comum ter ensino médio + superior, ou
+        # 2 graduações)
+        degree_kw = re.compile(r"^\s*(Tecnólogo|Tecnologo|Bacharel(ado)?|Gradua(ção|do)|MBA|Ensino (Médio|Fundamental|Superior)|Pós[- ]?gradua|Curso T[ée]cnico|Técnico em|Mestrado|Doutorado|Licenciatura)", re.I)
+        starts = [i for i, l in enumerate(lines_all) if l.strip() and degree_kw.match(l.strip())]
+        if starts:
+            chunks = []
+            for idx, s in enumerate(starts):
+                e = starts[idx+1] if idx+1 < len(starts) else len(lines_all)
+                chunks.append([l.strip() for l in lines_all[s:e] if l.strip()])
+        else:
+            chunks = [[l.strip() for l in lines_all if l.strip()]]
+        for lines in chunks[:6]:
+            if not lines: continue
+            degree = lines[0]
+            institution = ""
+            year = ""
+            # procura instituição e ano
+            for l in lines[1:]:
+                if re.search(r"20\d{2}", l):
+                    my = re.search(r"20\d{2}", l)
+                    if my: year = my.group(0)
+                    # só usa esta linha como instituição se uma linha anterior ainda não deu
+                    # uma — senão uma segunda linha com ano (ex: "Em andamento (Previsão:
+                    # 12/2027)") sobrescrevia a instituição já correta com essa data
+                    if not institution:
+                        if "–" in l:
+                            institution = l.split("–")[0].strip()
+                        elif "conclusão" in l.lower():
+                            institution = re.sub(r"–.*|conclusão.*", "", l, flags=re.I).strip()
+                        else:
+                            institution = l.strip()
+                    break
                 else:
-                    institution = l.strip()
-                break
-            else:
-                if not institution and len(l) > 5:
-                    institution = l.strip()
-        if degree:
-            data["education"].append({"degree": degree.title(), "institution": institution.title() if institution else "Instituição", "year": year or "2022"})
+                    if not institution and len(l) > 5:
+                        institution = l.strip()
+            if not year:
+                # o ano às vezes vem grudado no próprio título (ex: "Bacharelado em Ciência
+                # da Computação Concluído em 2023"), sem linha separada pra formação/instituição
+                my = re.search(r"20\d{2}", degree)
+                if my:
+                    year = my.group(0)
+                    degree = re.sub(r"\s*Conclu[ií]d[oa]?\s*(em)?\s*20\d{2}\s*$", "", degree, flags=re.I).strip()
+            data["education"].append({"degree": degree.title(), "institution": institution.title() if institution else "Instituição", "year": year})
     # fallback se não achou formação mas tem linha com "Tecnólogo" ou "Bacharel"
     if not data["education"]:
         m = re.search(r"(Tecnólogo|Bacharel|Graduação|Curso)[^\n]*", text, re.I)
