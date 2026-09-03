@@ -10,7 +10,8 @@ $args = @(
     "--name", "JobAutoFit_v2",
     "--windowed",
     "--icon", "NONE",
-    "--add-data", "curriculum_base.json;.",
+    # curriculum_base.json NUNCA entra aqui: ficaria com dados pessoais reais gravados
+    # dentro do binario para sempre. O app já lida bem com a ausência do arquivo (fica em branco).
     "--add-data", ".env.example;.",
     "--add-data", "logo.ico;.",
     "--icon", "logo.ico",
