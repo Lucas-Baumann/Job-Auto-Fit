@@ -1,6 +1,19 @@
 # 🚀 JobAutoFit - Automação Inteligente de Candidaturas e Otimização ATS (100% Gratuito)
 
+[![Build & Release](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml/badge.svg)](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml)
+
 O **JobAutoFit** é uma solução completa em Python criada para automatizar a busca de vagas (LinkedIn, Gupy e APIs abertas), otimizar seu currículo para passar pelos filtros automáticos (ATS) utilizando IA gratuita, realizar o envio de candidaturas e gerar um relatório final detalhado.
+
+---
+
+## 📥 Download (sem instalar Python)
+
+Baixe o executável pronto para o seu sistema na página de [**Releases**](https://github.com/Lucas-Baumann/Job-Auto-Fit/releases/latest):
+
+* **Windows** → `JobAutoFit_v2-windows.exe`
+* **Linux** → `JobAutoFit_v2-linux` (dê `chmod +x` antes de executar)
+
+Depois de baixar, siga os passos 3 e 4 da seção de instalação abaixo (`.env` e `curriculum_base.json`) — o executável lê esses arquivos na mesma pasta onde ele estiver.
 
 ---
 

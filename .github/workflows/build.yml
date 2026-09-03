@@ -1,0 +1,67 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # permite rodar manualmente pela aba Actions, sem precisar criar tag
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            built_path: dist/JobAutoFit_v2.exe
+            asset_name: JobAutoFit_v2-windows.exe
+          - os: ubuntu-latest
+            built_path: dist/JobAutoFit_v2
+            asset_name: JobAutoFit_v2-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instala tk (GUI no Linux depende de lib do sistema, não vem via pip)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - name: Instala dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compila o executável
+        run: pyinstaller JobAutoFit.spec --noconfirm
+
+      - name: Renomeia o binário para o nome final do asset
+        shell: bash
+        run: cp "${{ matrix.built_path }}" "${{ matrix.asset_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+
+  release:
+    # só roda em push de tag (workflow_dispatch serve pra testar o build sem publicar release)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Cria a Release com os binários Windows e Linux
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

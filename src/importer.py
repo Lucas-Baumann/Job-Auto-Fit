@@ -19,10 +19,20 @@ def extract_text_from_docx(docx_path: Path) -> str:
     except Exception as e:
         raise RuntimeError(f"Falha ao ler DOCX: {e} (pip install python-docx)")
 
+_ACCENT_MAP = str.maketrans(
+    "áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ",
+    "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC"
+)
+def _fold(s: str) -> str:
+    """minúsculas + sem acento, preservando o comprimento (1 char -> 1 char) para os índices
+    baterem com o texto original. Extração de PDF às vezes perde acentos de forma inconsistente
+    (ex: cabeçalho "EXPERIÊNCIA" no texto mas marcador de busca acentuado não batia)."""
+    return s.translate(_ACCENT_MAP).lower()
+
 def _extract_section(text: str, start_marker: str, end_markers: list) -> str:
     """Extrai bloco entre start_marker e o próximo end_marker (apenas cabeçalhos em linha própria)."""
-    low = text.lower()
-    start = low.find(start_marker.lower())
+    low = _fold(text)
+    start = low.find(_fold(start_marker))
     if start == -1:
         return ""
     start += len(start_marker)
@@ -30,7 +40,7 @@ def _extract_section(text: str, start_marker: str, end_markers: list) -> str:
     # procura end_marker apenas como cabeçalho (início de linha, com ou sem espaços)
     for m in end_markers:
         # regex para cabeçalho: quebra de linha + opcionais espaços + marker
-        pattern = re.compile(r"\n\s*" + re.escape(m.lower()))
+        pattern = re.compile(r"\n\s*" + re.escape(_fold(m)))
         match = pattern.search(low, pos=start)
         if match:
             idx = match.start()
@@ -86,14 +96,16 @@ def heuristic_parse_curriculum(text: str) -> dict:
     # skills: extrai APENAS do bloco Skills para não inventar do texto geral
     skill_keywords = ["python","java","javascript","typescript","html","css","vue.js","vue","react","next.js","nextjs","node",".net","dotnet","c#","csharp","php","ruby","rails","mysql","sql server","sql","docker","git","linux","aws","azure","fastapi","django","kubernetes","bootstrap","react native","expo","node.js","postgresql","postgres"]
     found=[]
-    # tenta extrair bloco Skills/Competências primeiro
-    skills_block = _extract_section(text, "COMPETÊNCIAS TÉCNICAS", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO","PROJETOS","CURSOS","IDIOMA","OBJETIVO"])
-    if not skills_block:
-        skills_block = _extract_section(text, "COMPETÊNCIAS", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO"])
-    if not skills_block:
-        skills_block = _extract_section(text, "HABILIDADES", ["EXPERIÊNCIA","FORMAÇÃO","RESUMO"])
-    if not skills_block:
-        skills_block = _extract_section(text, "SKILLS", ["EXPERIENCE","EDUCATION","SUMMARY"])
+    # tenta extrair bloco Skills/Competências primeiro — testa o cabeçalho completo antes do
+    # parcial ("COMPETÊNCIAS TÉCNICAS E TECNOLOGIAS", usado nos PDFs que o próprio app gera)
+    # pra não cortar o marcador no meio e deixar sobra ("E TECNOLOGIAS") vazando pra dentro
+    # do bloco de skills
+    skills_end_markers = ["EXPERIÊNCIA","FORMAÇÃO","RESUMO","PROJETOS","CURSOS","IDIOMA","OBJETIVO","EXPERIENCE","EDUCATION","SUMMARY"]
+    skills_block = ""
+    for alias in ["COMPETÊNCIAS TÉCNICAS E TECNOLOGIAS","COMPETÊNCIAS TÉCNICAS","COMPETÊNCIAS","HABILIDADES","SKILLS"]:
+        skills_block = _extract_section(text, alias, skills_end_markers)
+        if skills_block:
+            break
     tl = (skills_block if skills_block else text).lower()
     # extrai de "Tecnologias:" ou linha com "•" do PDF gerado
     m = re.search(r"Tecnologias:\s*([^\n]+)", text, re.I)
@@ -103,13 +115,14 @@ def heuristic_parse_curriculum(text: str) -> dict:
             p=part.strip()
             if p and len(p)<30 and p not in found:
                 found.append(p)
-    # fallback "•" do PDF ATS (ex: "React • Next.js • TypeScript")
-    if not found and skills_block and "•" in skills_block:
-        for part in skills_block.split("•"):
-            p=part.strip().replace("\n"," ")
-            if p and len(p)<30 and len(p.split())<=3 and p not in found:
-                # filtrar cabeçalhos
-                if p.lower() not in ["competências técnicas e tecnologias","habilidades","skills"]:
+    # extração genérica do bloco de habilidades: qualquer item vira skill, não só os da
+    # lista de tecnologia abaixo — sem isso, áreas como Direito/Administrativo/PowerBI
+    # ficavam sempre com skills vazias (nenhum termo delas bate com "python"/"react"/etc.)
+    if skills_block:
+        for part in re.split(r"[,;••\n|]", skills_block):
+            p = part.strip(" .-\t")
+            if 2 <= len(p) <= 40 and p.lower() not in ["competências técnicas e tecnologias","habilidades","skills","competências","technical skills"]:
+                if p.lower() not in [f.lower() for f in found]:
                     found.append(p)
     for kw in skill_keywords:
         # usa word boundary para evitar Java em JavaScript; para .net/c# usa simples contém
@@ -128,13 +141,22 @@ def heuristic_parse_curriculum(text: str) -> dict:
                 found.append(disp)
     # adiciona inglês como skill separada se houver
     data["skills"]=found[:20]
-    # summary: bloco RESUMO PROFISSIONAL até próxima seção
-    summary_block = _extract_section(text, "RESUMO PROFISSIONAL", ["HABILIDADES","CURSOS","FORMAÇÃO","PROJETOS","EXPERIÊNCIA","IDIOMA","OBJETIVO"])
-    if summary_block and len(summary_block)>50:
-        data["summary"]= " ".join(summary_block.split())[:800]
+    # summary: tenta vários cabeçalhos comuns (não só "RESUMO PROFISSIONAL" — currículos de
+    # outras áreas/idiomas usam "Perfil", "Objetivo", "About", "Summary" etc.)
+    summary_block = ""
+    summary_end_markers = ["HABILIDADES","CURSOS","FORMAÇÃO","PROJETOS","EXPERIÊNCIA","IDIOMA","OBJETIVO","EDUCATION","EXPERIENCE","SKILLS"]
+    for alias in ["RESUMO PROFISSIONAL","PERFIL PROFISSIONAL","OBJETIVO PROFISSIONAL","SOBRE MIM","SOBRE","PROFESSIONAL SUMMARY","SUMMARY","PROFILE","OBJECTIVE"]:
+        summary_block = _extract_section(text, alias, summary_end_markers)
+        if summary_block and len(summary_block) > 20:
+            break
+    if summary_block and len(summary_block) > 20:
+        data["summary"] = " ".join(summary_block.split())[:800]
     else:
-        # fallback: primeiros 800 chars após nome
-        data["summary"]= " ".join(text.split())[:800]
+        # sem seção identificável: usa o topo do texto, mas corta na última frase completa
+        # (em vez de truncar no meio de uma palavra/frase, o que deixava o resumo bagunçado)
+        raw = " ".join(text.split())[:800]
+        cut = raw.rfind(". ")
+        data["summary"] = raw[:cut+1] if cut > 200 else raw
     # languages
     m = re.search(r"Idioma:\s*([^\n]+)", text, re.I)
     if m:
@@ -146,10 +168,21 @@ def heuristic_parse_curriculum(text: str) -> dict:
         # fallback
         data["languages"]=["Inglês"]
     # experiences: bloco EXPERIÊNCIA PROFISSIONAL até fim ou FORMAÇÃO etc
-    exp_block = _extract_section(text, "EXPERIÊNCIA PROFISSIONAL", ["FORMAÇÃO","PROJETOS","CURSOS","IDIOMA"])
-    if not exp_block:
-        exp_block = _extract_section(text, "EXPERIENCIA PROFISSIONAL", ["FORMAÇÃO","PROJETOS","CURSOS","IDIOMA"])
+    exp_end_markers = ["FORMAÇÃO","PROJETOS","CURSOS","IDIOMA","EDUCATION","SKILLS","LANGUAGES"]
+    exp_block = ""
+    for alias in ["EXPERIÊNCIA PROFISSIONAL","EXPERIENCIA PROFISSIONAL","HISTÓRICO PROFISSIONAL","EXPERIÊNCIA","PROFESSIONAL EXPERIENCE","WORK EXPERIENCE","EXPERIENCE"]:
+        exp_block = _extract_section(text, alias, exp_end_markers)
+        if exp_block:
+            break
     if exp_block:
+        # pseudo-match usado pelos fallbacks que não vêm de um único re.finditer (grupos
+        # (cargo, empresa, periodo) montados manualmente)
+        class Pseudo:
+            def __init__(self,s,e,g): self._s=s; self._e=e; self._g=g
+            def groups(self): return self._g
+            def start(self): return self._s
+            def end(self): return self._e
+            def group(self, n): return self._g[n-1]
         # regex para cabeçalhos: CARGO – EMPRESA | LOCAL | DATA (ex: DESENVOLVEDOR – AUTÔNOMO | LAVRAS/MG | 05/2024 – ATUAL)
         header_pattern = re.compile(r"^(.+?)\s*[–-]\s*(.+?)\s*\|\s*([^|\n]+?)\s*\|\s*(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4}|\d{4})|ATUAL|\d{4}\s*[–-]\s*ATUAL)", re.MULTILINE)
         headers = list(header_pattern.finditer(exp_block))
@@ -157,6 +190,31 @@ def heuristic_parse_curriculum(text: str) -> dict:
         if not headers:
             header_pattern2 = re.compile(r"^(.+?)\s*[–-]\s*(.+?)\s*\|\s*(\d{2}/\d{4}\s*[–-]\s*(?:ATUAL|\d{2}/\d{4})|ATUAL)", re.MULTILINE)
             headers = list(header_pattern2.finditer(exp_block))
+        # fallback "duas linhas": "Cargo - Empresa" numa linha e o período sozinho na linha
+        # seguinte (formato comum em modelos de currículo de outras áreas) — sem isso, o
+        # próximo fallback (data no fim da MESMA linha) casava só a linha da data, perdendo
+        # cargo/empresa e deixando "position" vazio
+        if not headers:
+            date_only_rx = re.compile(r"^\s*(\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})\s*[–-]\s*(?:Atual|ATUAL|Present|Current|\d{2}/\d{4}|20\d{2}|(?:Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)[a-z]*\.?\s*/?\s*(?:de\s*)?\d{4})\s*$", re.I)
+            tmp_headers=[]; prev=None; offset=0
+            for raw in exp_block.splitlines(keepends=True):
+                line=raw.strip(); line_start=offset; offset+=len(raw)
+                if not line: prev=None; continue
+                if date_only_rx.match(line) and prev:
+                    title, title_start = prev
+                    sep = "–" if "–" in title else (" - " if " - " in title else None)
+                    if sep:
+                        parts = title.rsplit(sep,1)
+                        cargo, empresa = parts[0].strip(), parts[1].strip()
+                    else:
+                        cargo, empresa = title, ""
+                    tmp_headers.append(Pseudo(title_start, line_start+len(line), (cargo, empresa, line)))
+                    prev=None
+                elif (" - " in line or "–" in line) and len(line)<120 and not date_only_rx.search(line):
+                    prev=(line, line_start)
+                else:
+                    prev=None
+            headers = tmp_headers
         # terceiro fallback: formato sem pipe "Cargo - Empresa Data" (ex: Desenvolvedor Júnior - GaussFleet Maio de 2026 - Atual)
         if not headers:
             # detecta linhas que terminam com data e contêm " - "
@@ -194,13 +252,6 @@ def heuristic_parse_curriculum(text: str) -> dict:
                             else:
                                 cargo = prefix
                                 empresa = ""
-                        # cria objeto similar a match com groups e start/end
-                        class Pseudo:
-                            def __init__(self,s,e,g): self._s=s; self._e=e; self._g=g
-                            def groups(self): return self._g
-                            def start(self): return self._s
-                            def end(self): return self._e
-                            def group(self, n): return self._g[n-1]
                         tmp_headers.append(Pseudo(m.start(), m.end(), (cargo, empresa, period)))
             headers = tmp_headers
         if headers:
@@ -285,10 +336,23 @@ def heuristic_parse_curriculum(text: str) -> dict:
             # tenta padrão simples: linhas com ano
             for m in re.finditer(r"([A-Za-zÀ-ú\s\-–]+)\s*[–-]\s*([A-Za-z0-9\s\/]+)\s*\|\s*([^\n]+)", exp_block):
                 data["experiences"].append({"company": m.group(2).strip().title(), "position": m.group(1).strip().title(), "period": m.group(3).strip(), "highlights": []})
+        # último fallback: nenhum padrão de cabeçalho reconheceu o formato (currículo de outra
+        # área/modelo, bem diferente do que o próprio app gera) — em vez de deixar a lista de
+        # experiências vazia, trata cada parágrafo do bloco como uma experiência
+        if not data["experiences"]:
+            date_rx = re.compile(r"(\d{2}/\d{4}|20\d{2})\s*[–-]\s*(Atual|ATUAL|Present|Current|\d{2}/\d{4}|20\d{2})", re.I)
+            for para in [p.strip() for p in re.split(r"\n\s*\n", exp_block) if p.strip()][:10]:
+                lines = [l.strip() for l in para.splitlines() if l.strip()]
+                if not lines: continue
+                dm = date_rx.search(para)
+                highlights = [l.strip(" •-") for l in lines[1:] if len(l.strip(" •-")) > 15][:5]
+                data["experiences"].append({"company": "Empresa", "position": lines[0][:120].title(), "period": dm.group(0).strip() if dm else "", "highlights": highlights})
     # education: bloco FORMAÇÃO ACADÊMICA
-    edu_block = _extract_section(text, "FORMAÇÃO ACADÊMICA", ["PROJETOS","EXPERIÊNCIA","CURSOS","HABILIDADES","IDIOMA"])
-    if not edu_block:
-        edu_block = _extract_section(text, "FORMAÇÃO", ["PROJETOS","EXPERIÊNCIA","CURSOS"])
+    edu_block = ""
+    for alias in ["FORMAÇÃO ACADÊMICA","FORMAÇÃO","EDUCAÇÃO","EDUCATION","ACADEMIC BACKGROUND"]:
+        edu_block = _extract_section(text, alias, ["PROJETOS","EXPERIÊNCIA","CURSOS","HABILIDADES","IDIOMA","EXPERIENCE","SKILLS"])
+        if edu_block:
+            break
     if edu_block:
         # ex: Tecnólogo em Análise e Desenvolvimento de Sistemas\nCentro Universitário Unilavras – Conclusão: 2022
         lines = [l.strip() for l in edu_block.splitlines() if l.strip()]

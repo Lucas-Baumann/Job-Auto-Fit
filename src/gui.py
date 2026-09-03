@@ -149,6 +149,23 @@ class App(tb.Window):
         self.var_github_token=tk.StringVar(value=self.env.get("GITHUB_TOKEN",""))
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
+        self.after(300, self._maybe_show_onboarding)
+
+    def _maybe_show_onboarding(self):
+        # primeira execução (currículo em branco, sem nome nem experiência) — evita a pessoa
+        # achar que o app "travou" ou "não importou nada" olhando os campos vazios sem contexto
+        pi = self.curriculum.get("personal_info",{})
+        if pi.get("name") or self.curriculum.get("experiences"):
+            return
+        messagebox.showinfo(
+            "Bem-vindo ao JobAutoFit",
+            "Primeira execução — nenhum currículo carregado ainda.\n\n"
+            "Passo a passo sugerido:\n"
+            "1) Aba 3 (IA & Conexões) — configure uma chave de IA (Gemini/OpenRouter grátis ou Ollama local). "
+            "Sem isso, o import de PDF usa um modo heurístico mais limitado.\n"
+            "2) Aba 1 (Currículo) — clique em \"Importar PDF/DOCX/TXT\" para preencher automaticamente.\n"
+            "3) Revise os campos preenchidos e clique em \"Salvar Tudo\"."
+        )
 
     def _build_ui(self):
         top=tb.Frame(self,padding=10); top.pack(fill=X)
@@ -299,10 +316,22 @@ class App(tb.Window):
             # mensagem com aviso sobre IA
             exp_count=len(parsed.get("experiences",[]))
             edu_count=len(parsed.get("education",[]))
-            msg=f"Importado de {Path(p).name}\nExperiências: {exp_count} | Formação: {edu_count} | Skills: {len(parsed.get('skills',[]))}\nRevise os campos antes de salvar."
+            skills_count=len(parsed.get("skills",[]))
+            msg=f"Importado de {Path(p).name}\nExperiências: {exp_count} | Formação: {edu_count} | Skills: {skills_count}\nRevise os campos antes de salvar."
+            # avisa campo a campo quando algo veio vazio — currículos fora do formato usual
+            # (outra área, outro modelo/idioma) podem escapar até da IA, e ficar em silêncio
+            # nesse caso é o que gerava a sensação de "sumiu"/"bagunçou"
+            faltando=[]
+            if exp_count==0: faltando.append("nenhuma experiência")
+            if edu_count==0: faltando.append("nenhuma formação")
+            if skills_count==0: faltando.append("nenhuma habilidade")
+            if faltando:
+                msg+="\n\n⚠ Não foi identificada "+", ".join(faltando)+" — preencha manualmente nesta aba."
             if not has_llm:
                 msg+="\n\n⚠ Sem IA configurada — análise heurística. Com IA (aba 3 → OpenRouter/Gemini) a extração de experiências/formação é 100% precisa e preenche automaticamente."
                 messagebox.showwarning("Importar — IA recomendada",msg)
+            elif faltando:
+                messagebox.showwarning("Importar — revise os campos",msg)
             else:
                 messagebox.showinfo("Importar",msg + "\n\n✓ IA usada para melhor análise.")
         except Exception as e: messagebox.showerror("Importar",str(e))

@@ -54,8 +54,8 @@ class Config:
     CUSTOM_LLM_KEY = os.getenv("CUSTOM_LLM_KEY", "")
 
     # SMTP
-    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_HOST = os.getenv("SMTP_HOST") or "smtp.gmail.com"
+    SMTP_PORT = int(os.getenv("SMTP_PORT") or "587")  # "or" cobre tanto var ausente quanto salva vazia (ex: GUI limpou o campo)
     SMTP_USER = os.getenv("SMTP_USER", "")
     SMTP_PASS = os.getenv("SMTP_PASS", "")
 
