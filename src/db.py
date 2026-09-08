@@ -6,6 +6,10 @@ from config import Config
 def get_db_connection():
     conn = sqlite3.connect(Config.DB_PATH)
     conn.row_factory = sqlite3.Row
+    # WAL: a automação roda em thread separada (não trava a GUI) e escreve no mesmo jobs.db
+    # que o Dashboard/Histórico podem estar lendo ao mesmo tempo — sem WAL, isso pode disparar
+    # "database is locked"; com WAL, leitores e escritor não se bloqueiam mutuamente.
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 def init_db():

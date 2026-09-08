@@ -2,6 +2,7 @@ import re
 import time
 import os
 import requests
+import concurrent.futures
 from bs4 import BeautifulSoup
 from typing import List, Dict
 
@@ -561,36 +562,32 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
     
     for kw in keywords_list:
         print(f"[Collector] Buscando vagas para '{kw}'...")
-        
-        # 1. Gupy
-        gupy_jobs = fetch_gupy_jobs(kw, limit=limit_per_source)
-        all_jobs.extend(gupy_jobs)
-        
-        # 2. LinkedIn
+
+        # Gupy/Remotive/InfoJobs/Catho/Programathor são fontes independentes, sem o
+        # backoff/anti-bot que o LinkedIn precisa — rodam em paralelo. Antes eram 5
+        # chamadas HTTP sequenciais por keyword (uma esperando a outra terminar); em
+        # paralelo o tempo total cai de "soma de todas as latências" para "a mais lenta".
+        parallel_sources = {
+            "Gupy": lambda: fetch_gupy_jobs(kw, limit=limit_per_source),
+            "Remotive": lambda: fetch_remotive_jobs(kw, limit=limit_per_source),
+            "InfoJobs": lambda: fetch_infojobs_jobs(kw, limit=max(1, limit_per_source//2)),
+            "Catho": lambda: fetch_catho_jobs(kw, limit=max(1, limit_per_source//2)),
+            "Programathor": lambda: fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2)),
+        }
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(parallel_sources)) as pool:
+            futures = {pool.submit(fn): name for name, fn in parallel_sources.items()}
+            for future in concurrent.futures.as_completed(futures):
+                name = futures[future]
+                try:
+                    all_jobs.extend(future.result())
+                except Exception as e:
+                    print(f"[Collector][{name}] Erro: {e}")
+
+        # LinkedIn (vagas) fica fora do paralelismo por causa do backoff/anti-bot próprio
         linkedin_jobs = fetch_linkedin_jobs(kw, location=location, limit=limit_per_source)
         all_jobs.extend(linkedin_jobs)
-        
-        # 3. Remotive
-        remotive_jobs = fetch_remotive_jobs(kw, limit=limit_per_source)
-        all_jobs.extend(remotive_jobs)
 
-        # 3b. InfoJobs
-        try:
-            ij_jobs = fetch_infojobs_jobs(kw, limit=max(1, limit_per_source//2))
-            all_jobs.extend(ij_jobs)
-        except: pass
-        # 3c. Catho
-        try:
-            catho_jobs = fetch_catho_jobs(kw, limit=max(1, limit_per_source//2))
-            all_jobs.extend(catho_jobs)
-        except: pass
-        # 3d. Programathor (TI)
-        try:
-            pg_jobs = fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2))
-            all_jobs.extend(pg_jobs)
-        except: pass
-
-        # 4. LinkedIn Posts de recrutadores (nova fonte)
+        # LinkedIn Posts de recrutadores (nova fonte)
         if enable_linkedin_posts:
             try:
                 posts_jobs = fetch_linkedin_recruiter_posts(kw, limit=linkedin_posts_limit)

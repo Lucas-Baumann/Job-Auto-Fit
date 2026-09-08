@@ -1,6 +1,8 @@
 # Secrets / local
 .env
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 search_config.json
 github_selection.json

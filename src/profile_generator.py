@@ -9,12 +9,29 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import requests
 from pathlib import Path
 from typing import Dict, List, Tuple
 from config import Config
 from ats_optimizer import call_llm
 from logutil import log_print
+
+_GH_CACHE: Dict[str, Tuple[float, object]] = {}
+_GH_CACHE_TTL = 300  # 5min: o fluxo normal (Analisar -> Buscar Repos -> Gerar -> Publicar)
+# repete a mesma chamada (repos do usuário, README de cada repo) várias vezes em sequência
+# na mesma sessão de uso — sem cache isso vira 2-3x mais chamadas à API do GitHub do que
+# o necessário, arriscando o limite de 60/h sem token.
+
+def _cached_get(url: str, **kwargs):
+    now = time.time()
+    hit = _GH_CACHE.get(url)
+    if hit and now - hit[0] < _GH_CACHE_TTL:
+        return hit[1]
+    r = requests.get(url, **kwargs)
+    if r.status_code == 200:
+        _GH_CACHE[url] = (now, r)
+    return r
 
 def _parse_llm_json(resp: str) -> dict:
     """Extrai o objeto JSON da resposta da IA. Modelos gratuitos/pequenos costumam envolver o
@@ -157,7 +174,7 @@ jobs:
 
 def fetch_github_user(username: str) -> Dict:
     try:
-        r = requests.get(f"https://api.github.com/users/{username}", timeout=10, headers={"Accept":"application/vnd.github.v3+json"})
+        r = _cached_get(f"https://api.github.com/users/{username}", timeout=10, headers={"Accept":"application/vnd.github.v3+json"})
         if r.status_code == 200:
             return r.json()
     except Exception as e:
@@ -166,7 +183,7 @@ def fetch_github_user(username: str) -> Dict:
 
 def fetch_repos(username: str, limit: int = 100) -> List[Dict]:
     try:
-        r = requests.get(f"https://api.github.com/users/{username}/repos?per_page={limit}&sort=updated", timeout=10)
+        r = _cached_get(f"https://api.github.com/users/{username}/repos?per_page={limit}&sort=updated", timeout=10)
         if r.status_code == 200:
             return r.json()
     except: pass
@@ -176,7 +193,7 @@ def fetch_old_readme(username: str) -> str:
     for branch in ["main","master"]:
         try:
             url = f"https://raw.githubusercontent.com/{username}/{username}/{branch}/README.md"
-            r = requests.get(url, timeout=8)
+            r = _cached_get(url, timeout=8)
             if r.status_code == 200 and len(r.text) > 50:
                 return r.text
         except: pass
@@ -326,13 +343,13 @@ def fetch_repo_readme(username: str, repo: str) -> str:
     for branch in ["main","master","dev"]:
         try:
             url = f"https://raw.githubusercontent.com/{username}/{repo}/{branch}/README.md"
-            r = requests.get(url, timeout=8)
+            r = _cached_get(url, timeout=8)
             if r.status_code == 200 and len(r.text) > 30:
                 return r.text
         except: pass
     # tenta via API contents
     try:
-        r = requests.get(f"https://api.github.com/repos/{username}/{repo}/readme", timeout=8, headers={"Accept":"application/vnd.github.v3.raw"})
+        r = _cached_get(f"https://api.github.com/repos/{username}/{repo}/readme", timeout=8, headers={"Accept":"application/vnd.github.v3.raw"})
         if r.status_code == 200 and len(r.text) > 30:
             return r.text
     except: pass
@@ -340,7 +357,7 @@ def fetch_repo_readme(username: str, repo: str) -> str:
 
 def fetch_repo_languages(username: str, repo: str) -> List[str]:
     try:
-        r = requests.get(f"https://api.github.com/repos/{username}/{repo}/languages", timeout=8)
+        r = _cached_get(f"https://api.github.com/repos/{username}/{repo}/languages", timeout=8)
         if r.status_code == 200:
             data = r.json()
             # ordena por bytes
@@ -357,7 +374,7 @@ def generate_repo_readme(username: str, repo: str, curriculum: dict, old_readme:
     repo_data={}
     langs=[]
     try:
-        r = requests.get(f"https://api.github.com/repos/{username}/{repo}", timeout=8)
+        r = _cached_get(f"https://api.github.com/repos/{username}/{repo}", timeout=8)
         if r.status_code == 200:
             repo_data = r.json()
             langs = fetch_repo_languages(username, repo)

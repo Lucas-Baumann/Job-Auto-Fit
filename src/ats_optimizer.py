@@ -45,6 +45,22 @@ def _call_openai_compat(prompt: str, api_key: str, base_url: str, model: str) ->
         print(f"[ATS AI] OpenAI-compat erro: {e}")
     return ""
 
+def call_openrouter_once(prompt: str, api_key: str, model: str, max_tokens: int = 2000) -> requests.Response:
+    """Uma única chamada à API da OpenRouter, sem fallback de modelo — parametrizada (não lê
+    Config) para poder ser reusada tanto por call_llm() (que tenta vários modelos em sequência
+    com a chave já salva) quanto pelo botão "Testar Conexão" da GUI (aba 3), que precisa testar
+    a chave/modelo ainda digitados no formulário, antes de salvar. Antes a GUI reimplementava
+    esse POST na mão, separado daqui — bastava a API mudar formato pra precisar lembrar de
+    atualizar em dois lugares."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit",
+        "X-Title": "JobAutoFit",
+    }
+    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens}
+    return requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=45)
+
 def call_llm(prompt: str) -> str:
     """Chama a IA configurada (gemini|ollama|openai|claude|groq|custom) — todos opcionais."""
     provider = Config.LLM_PROVIDER
@@ -90,17 +106,7 @@ def call_llm(prompt: str) -> str:
 
         for model in models_to_try:
             try:
-                headers = {
-                    "Authorization": f"Bearer {Config.OPENROUTER_API_KEY}", 
-                    "Content-Type": "application/json", 
-                    "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit", 
-                    "X-Title": "JobAutoFit"
-                }
-                payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2000}
-                r = requests.post("https://openrouter.ai/api/v1/chat/completions", 
-                                 headers=headers,
-                                  json=payload, 
-                                  timeout=45)
+                r = call_openrouter_once(prompt, Config.OPENROUTER_API_KEY, model)
                 if r.status_code == 200:
                     return r.json()["choices"][0]["message"]["content"]
                 else:

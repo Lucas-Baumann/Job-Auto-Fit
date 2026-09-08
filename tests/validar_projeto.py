@@ -97,20 +97,13 @@ try:
 except Exception as e:
     fail("ATS", str(e))
 
-# 8. GitHub/Profile module (github_optimizer foi substituído por profile_generator na nuvem)
+# 8. GitHub/Profile module
 try:
-    try:
-        from github_optimizer import fetch_repos, generate_project_readme
-        repos = fetch_repos("Lucas-Baumann")
-        ok("GITHUB_FETCH", f"{len(repos)} repos (github_optimizer)")
-        md = generate_project_readme(repos[0], {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]})
-        ok("GITHUB_README", f"md len={len(md)} chars (github_optimizer)")
-    except ImportError:
-        from profile_generator import fetch_repos, generate_profile_readme
-        repos = fetch_repos("Lucas-Baumann")
-        ok("GITHUB_FETCH", f"{len(repos)} repos (profile_generator)")
-        md, info = generate_profile_readme("Lucas-Baumann", {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]}, "", use_llm=False)
-        ok("PROFILE_GEN", f"profile md len={len(md)} chars, info={info}")
+    from profile_generator import fetch_repos, generate_profile_readme
+    repos = fetch_repos("Lucas-Baumann")
+    ok("GITHUB_FETCH", f"{len(repos)} repos (profile_generator)")
+    md, info = generate_profile_readme("Lucas-Baumann", {"personal_info":{"name":"Test"},"summary":"","skills":["Python"]}, "", use_llm=False)
+    ok("PROFILE_GEN", f"profile md len={len(md)} chars, info={info}")
 except Exception as e:
     fail("GITHUB", str(e))
 
