@@ -43,6 +43,10 @@ class Config:
     # LLM / IA (gratuito ou pago — todos opcionais)
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()  # gemini|ollama|openai|claude|groq|openrouter|custom
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    # "gemini-flash-latest" e "gemini-pro-latest" são aliases que o Google atualiza
+    # automaticamente para o modelo estável mais recente — evita 404 quando uma
+    # versão fixa (ex: gemini-1.5-flash, gemini-2.5-flash) é aposentada.
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

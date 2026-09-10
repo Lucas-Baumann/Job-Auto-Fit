@@ -31,6 +31,8 @@ class IATabMixin:
         info_icon(self.frame_gemini, "Chave gratuita do Google Gemini. Deixe em branco para heurístico.").pack(side=LEFT)
         def toggle(): self.ent_gemini.config(show="" if self.ent_gemini.cget("show")=="*" else "*"); btn_show.config(text="Ocultar" if self.ent_gemini.cget("show")=="" else "Mostrar")
         btn_show=tb.Button(self.frame_gemini,text="Mostrar",bootstyle="secondary-outline",command=toggle,width=8); btn_show.pack(side=LEFT,padx=5)
+        tb.Label(self.frame_gemini,text="Modelo").pack(side=LEFT,padx=5); self.combo_gemini_model=tb.Combobox(self.frame_gemini,textvariable=self.var_gemini_model,values=["gemini-flash-latest","gemini-pro-latest"],width=20); self.combo_gemini_model.pack(side=LEFT,padx=5)
+        info_icon(self.frame_gemini, "'-latest' segue automaticamente a versão estável mais recente do Google. Se der 404, veja o nome atual em ai.google.dev/gemini-api/docs/models e digite aqui.").pack(side=LEFT)
         self.frame_ollama=tb.Frame(self.frame_ia_dynamic)
         tb.Label(self.frame_ollama,text="Ollama Host").pack(side=LEFT,padx=5); self.ent_ollama_host=tb.Entry(self.frame_ollama,textvariable=self.var_ollama_host,width=28); self.ent_ollama_host.pack(side=LEFT,padx=5)
         info_icon(self.frame_ollama, "IA local gratuita. Instale em ollama.com e rode 'ollama run llama3'").pack(side=LEFT)
@@ -155,10 +157,11 @@ class IATabMixin:
             return
         key=self.var_gemini_key.get().strip()
         if not key: messagebox.showwarning("Gemini","Informe a key"); return
+        model_name=self.var_gemini_model.get().strip() or "gemini-flash-latest"
         try:
             import google.generativeai as genai
-            genai.configure(api_key=key); m=genai.GenerativeModel("gemini-1.5-flash"); r=m.generate_content("Responda OK")
+            genai.configure(api_key=key); m=genai.GenerativeModel(model_name); r=m.generate_content("Responda OK")
             messagebox.showinfo("Gemini",r.text[:200])
-        except Exception as e: messagebox.showerror("Gemini",str(e))
+        except Exception as e: messagebox.showerror("Gemini",f"Modelo '{model_name}': {e}")
 
     # Execução

@@ -69,8 +69,11 @@ def call_llm(prompt: str) -> str:
         try:
             import google.generativeai as genai
             genai.configure(api_key=Config.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt)
+            model = genai.GenerativeModel(Config.GEMINI_MODEL)
+            # sem timeout aqui a chamada pode travar o pipeline indefinidamente se a API
+            # demorar/enguiçar — diferente dos outros provedores (openai/claude/groq/custom),
+            # que já usam requests.post(..., timeout=45/60) explícito.
+            response = model.generate_content(prompt, request_options={"timeout": 60})
             return response.text
         except Exception as e:
             # não existe fallback real para outro provedor aqui — quem chama (evaluate_and_optimize_resume)
