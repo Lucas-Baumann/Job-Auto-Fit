@@ -242,6 +242,52 @@ def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         company_name="Catho", platform="catho",
     )
 
+def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas públicas do Vagas.com. A busca é por slug na URL
+    (/vagas-de-desenvolvedor-python), não por query string — termos muito específicos
+    tipo 'react native' costumam não ter slug próprio no site (0 resultado real, não é
+    bug do scraper: tente termos mais genéricos como 'desenvolvedor mobile')."""
+    jobs = []
+    slug = re.sub(r"[^a-z0-9]+", "-", keywords.lower()).strip("-")
+    url = f"https://www.vagas.com.br/vagas-de-{slug}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("li.vaga")[:limit]
+            for card in cards:
+                title_el = card.find(class_="cargo")
+                title = title_el.get_text(" ", strip=True) if title_el else keywords.title()
+                link_el = card.find("a", class_="link-detalhes-vaga", href=True) or card.find("a", href=True)
+                job_url = link_el["href"] if link_el else url
+                if job_url.startswith("/"):
+                    job_url = "https://www.vagas.com.br" + job_url
+                company_el = card.find(class_="emprVaga")
+                company = company_el.get_text(" ", strip=True) if company_el else "Vagas.com"
+                loc_el = card.find(class_="vaga-local")
+                location = "Brasil"
+                if loc_el:
+                    tooltip = loc_el.find(class_="tooltip-place")
+                    if tooltip:
+                        tooltip.extract()
+                    location = loc_el.get_text(" ", strip=True) or "Brasil"
+                desc = card.get_text(separator=' ', strip=True)[:800]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company,
+                    'location': location,
+                    'url': job_url,
+                    'platform': 'vagascom',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                time.sleep(0.5)
+    except Exception as e:
+        print(f"[Collector] Vagas.com erro: {e}")
+    if not jobs:
+        print(f"[Collector][Vagas.com] 0 vagas para '{keywords}' — termo pode não ter slug próprio no site (tente algo mais genérico) ou seletor desatualizado.")
+    return jobs
+
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas de TI do Programathor (focado em dev)."""
     jobs = []
@@ -573,6 +619,7 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
             "InfoJobs": lambda: fetch_infojobs_jobs(kw, limit=max(1, limit_per_source//2)),
             "Catho": lambda: fetch_catho_jobs(kw, limit=max(1, limit_per_source//2)),
             "Programathor": lambda: fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2)),
+            "VagasCom": lambda: fetch_vagascom_jobs(kw, limit=max(1, limit_per_source//2)),
         }
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(parallel_sources)) as pool:
             futures = {pool.submit(fn): name for name, fn in parallel_sources.items()}
