@@ -3,7 +3,7 @@ from datetime import datetime
 
 import json
 from config import Config
-from db import init_db, save_job, update_job_status, get_all_jobs_in_session, get_db_connection
+from db import init_db, save_job, update_job_status, update_job_match, get_all_jobs_in_session, get_db_connection
 from collector import collect_all_jobs
 from ats_optimizer import process_job_ats
 from sender import apply_to_job
@@ -114,6 +114,10 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
             job['match_reason'] = reason
             job['resume_pdf_path'] = pdf_path
             job['cover_letter_path'] = cover_path
+            # update_job_status() só grava status/PDFs — sem isso, match_score/match_reason
+            # ficavam para sempre em 0/None no banco (o valor calculado aqui só existia em
+            # memória), e Histórico/Dashboard/relatórios mostravam 0% de match pra tudo.
+            update_job_match(job['id'], score, reason)
 
             log_print(f"   -> Match ATS: {score}% ({reason})")
 
