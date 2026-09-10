@@ -288,6 +288,53 @@ def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         print(f"[Collector][Vagas.com] 0 vagas para '{keywords}' — termo pode não ter slug próprio no site (tente algo mais genérico) ou seletor desatualizado.")
     return jobs
 
+def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas remotas do We Work Remotely (site global, vagas em inglês). Cada card
+    de anúncio pago (ex: "Remote Tech Jobs Paying $130k-$250k" de uma agência) usa um link
+    de rastreamento /listing_ads/... em vez de um link real de vaga /remote-jobs/... — só
+    aceitamos cards com link real, senão contamina o resultado com propaganda genérica."""
+    jobs = []
+    url = f"https://weworkremotely.com/remote-jobs/search?term={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("li.new-listing-container")
+            count = 0
+            for card in cards:
+                if count >= limit:
+                    break
+                link_el = card.find("a", href=lambda h: h and h.startswith("/remote-jobs/"))
+                if not link_el:
+                    continue  # anúncio pago sem vaga real associada
+                title_el = card.find(class_="new-listing__header__title")
+                title = title_el.get_text(" ", strip=True) if title_el else keywords.title()
+                company_el = card.find(class_="new-listing__company-name")
+                company = company_el.get_text(" ", strip=True) if company_el else "We Work Remotely"
+                tagline_el = card.find(class_="new-listing__company-headquarters")
+                categories = [c.get_text(strip=True) for c in card.select(".new-listing__categories__category")]
+                # categorias podem listar dezenas de países elegíveis — não dá pra resumir em
+                # "uma" localização, então fica genérico e a lista completa vai na descrição
+                location = "Remoto (Internacional)"
+                desc_parts = [tagline_el.get_text(" ", strip=True) if tagline_el else "", ", ".join(categories)]
+                desc = " | ".join(p for p in desc_parts if p)[:800]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company,
+                    'location': location,
+                    'url': "https://weworkremotely.com" + link_el["href"],
+                    'platform': 'weworkremotely',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                count += 1
+                time.sleep(0.5)
+    except Exception as e:
+        print(f"[Collector] We Work Remotely erro: {e}")
+    if not jobs:
+        print(f"[Collector][WeWorkRemotely] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+    return jobs
+
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas de TI do Programathor (focado em dev)."""
     jobs = []
@@ -620,6 +667,7 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
             "Catho": lambda: fetch_catho_jobs(kw, limit=max(1, limit_per_source//2)),
             "Programathor": lambda: fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2)),
             "VagasCom": lambda: fetch_vagascom_jobs(kw, limit=max(1, limit_per_source//2)),
+            "WeWorkRemotely": lambda: fetch_wwr_jobs(kw, limit=max(1, limit_per_source//2)),
         }
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(parallel_sources)) as pool:
             futures = {pool.submit(fn): name for name, fn in parallel_sources.items()}
