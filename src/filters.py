@@ -53,6 +53,22 @@ def requires_english(text: str) -> bool:
     t=text.lower()
     return any(k in t for k in ["inglês avançado","ingles avançado","english fluent","inglês fluente","english advanced","inglês intermediário"])
 
+def requires_us_location(text: str) -> bool:
+    """Detecta vagas do LinkedIn/exterior que exigem estar nos EUA (autorização de trabalho,
+    cidadania, ou 'apenas candidatos dos EUA') — inaplicável pra quem mora no Brasil, mas
+    aparecia no relatório porque buscas em inglês (ex: 'Desenvolvedor Python' -> 'Python
+    Developer') trazem vagas americanas junto com as brasileiras."""
+    if not text: return False
+    t = text.lower()
+    return any(re.search(p, t) for p in [
+        r"authorized to work in the united states",
+        r"must be (?:currently )?located in the united states",
+        r"u\.?s\.?\s*applicants only",
+        r"united states only",
+        r"must be a u\.?s\.?\s*citizen",
+        r"require[sd]? u\.?s\.?\s*citizenship",
+    ])
+
 def parse_published_days(job: Dict) -> int | None:
     """Tenta extrair idade da vaga em dias (se tiver campo). Retorna None se não disponível."""
     for key in ["publication_date","published_at","created_at","date_posted"]:
@@ -71,6 +87,22 @@ def parse_published_days(job: Dict) -> int | None:
     if m: return int(m.group(1))
     m = re.search(r"(\d+)\s*days?\s*ago", txt)
     if m: return int(m.group(1))
+    # "Publicada em 25/08" ou "25/08/2026" (Catho/InfoJobs/Vagas.com mostram data absoluta,
+    # não relativa — sem isso a vaga passava despercebida pelo filtro de idade máxima)
+    m = re.search(r"public(?:ada|ado)\s+em\s+(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", txt)
+    if m:
+        day, month, year = m.groups()
+        try:
+            day, month = int(day), int(month)
+            year = int(year) if year else datetime.now().year
+            if year < 100:
+                year += 2000
+            pub_date = datetime(year, month, day)
+            if pub_date > datetime.now():
+                pub_date = pub_date.replace(year=year - 1)
+            return (datetime.now() - pub_date).days
+        except ValueError:
+            pass
     return None
 
 def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
@@ -131,6 +163,11 @@ def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
         return False, "nao_exige_ingles"
     if eng == "nao" and requires_english(desc):
         return False, "exige_ingles"
+
+    # 8.5. Vaga exige localização/autorização nos EUA (comum em vagas do LinkedIn em inglês
+    # que "vazam" pra buscas genéricas tipo "Python Developer" — inaplicável no Brasil)
+    if requires_us_location(desc):
+        return False, "exige_localizacao_eua"
 
     # 9. Idade da vaga
     max_age = int(cfg.get("max_age_days",0) or 0)
