@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+from collections import Counter
 
 import json
 from config import Config
@@ -61,8 +62,14 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     # aplicar filtros avançados antes de salvar
     if filter_cfg:
         before = len(raw_jobs)
+        before_jobs = raw_jobs  # filter_jobs marca _filter_reason em cada item (inclusive "ok")
         raw_jobs = filter_jobs(raw_jobs, filter_cfg)
         log_print(f"[Filtros] {before} -> {len(raw_jobs)} vagas após filtros avançados (salário/nível/PCD/inglês/excluir/bloqueadas)")
+        # mostra ONDE as vagas estão sendo cortadas (qual filtro é o gargalo), em vez de só o total
+        rejected = Counter(j.get("_filter_reason", "?").split(":")[0] for j in before_jobs if j.get("_filter_reason") != "ok")
+        if rejected:
+            breakdown = ", ".join(f"{motivo} ({qtd})" for motivo, qtd in rejected.most_common())
+            log_print(f"[Filtros] Motivos de rejeição: {breakdown}")
 
     # daily limit
     daily_limit = int(filter_cfg.get("daily_limit", Config.DAILY_LIMIT) or Config.DAILY_LIMIT)
