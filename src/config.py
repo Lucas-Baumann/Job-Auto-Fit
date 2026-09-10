@@ -1,33 +1,67 @@
 import os
 import sys
+import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Raiz do projeto: se empacotado, é pasta do projeto (exe está em dist/), não Temp/_MEI
+_project_root = Path(__file__).resolve().parent.parent
+
 # Detecta PyInstaller via sys._MEIPASS ou sys.frozen ou caminho com _MEI
 is_frozen = getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS') or "_MEI" in str(Path(__file__).resolve())
 if is_frozen:
-    # exe está em dist/ -> projeto é um nível acima; senão, é a pasta do exe
+    # Pasta onde o .exe foi colocado pelo usuário (Desktop, Downloads, pendrive...) — usada
+    # só para localizar dados de uma instalação anterior (migração abaixo). Os dados do
+    # usuário NÃO ficam mais aqui: cada pasta onde alguém soltasse o .exe criava sua própria
+    # cópia de currículo/banco/logs, e uma pasta protegida (ex: Program Files) podia falhar
+    # ao gravar.
+    # IMPORTANTE: não dá pra comparar _legacy_dir contra "Path(__file__).resolve().parent.parent"
+    # pra detectar o build local de teste (pasta dist/) — em modo congelado, __file__ aponta pra
+    # dentro da pasta temporária de extração do PyInstaller (_MEIxxxxx), não pro repositório real,
+    # então essa comparação nunca dá igual e a migração dispararia por engano em cima dos dados
+    # reais do próprio repositório (já aconteceu uma vez durante o teste deste fix). O sinal
+    # confiável é o nome da pasta do executável ("dist") checado abaixo, guardado em _is_dev_build.
+    _is_dev_build = False
     try:
         exe_path = Path(sys.executable).resolve() if hasattr(sys, 'executable') else Path(__file__).resolve()
         exe_dir = exe_path.parent
         if exe_dir.name.lower() == "dist":
-            BASE_DIR = exe_dir.parent
+            # exe está em dist/ (build local de teste) -> projeto é um nível acima
+            _legacy_dir = exe_dir.parent
+            _is_dev_build = True
         else:
-            # se exe está em Temp/_MEI, usa cwd (onde o exe foi lançado, que é dist ou projeto)
+            # se exe está em Temp/_MEI, usa cwd (onde o exe foi lançado)
             if "_MEI" in str(exe_dir) or "Temp" in str(exe_dir):
-                BASE_DIR = Path.cwd()
-                # se cwd é Temp, tenta exe_dir original
-                if "_MEI" in str(BASE_DIR):
-                    BASE_DIR = Path(sys.executable).resolve().parent
-                    if BASE_DIR.name.lower() == "dist":
-                        BASE_DIR = BASE_DIR.parent
+                _legacy_dir = Path.cwd()
+                if "_MEI" in str(_legacy_dir):
+                    _legacy_dir = Path(sys.executable).resolve().parent
+                    if _legacy_dir.name.lower() == "dist":
+                        _legacy_dir = _legacy_dir.parent
+                        _is_dev_build = True
             else:
-                BASE_DIR = exe_dir
-    except:
-        BASE_DIR = Path.cwd()
+                _legacy_dir = exe_dir
+    except Exception:
+        _legacy_dir = Path.cwd()
+
+    # Dados do usuário agora ficam em %LOCALAPPDATA%\JobAutoFit, fora da pasta do .exe
+    BASE_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "JobAutoFit"
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Migração única: versões anteriores gravavam tudo do lado do .exe. Se a pasta antiga
+    # tiver dados de uma instalação real (não a pasta dist/ do build local, que é o próprio
+    # repositório) e a nova ainda não, move em vez de deixar o usuário achando que perdeu
+    # currículo/chaves/histórico de vagas.
+    if not _is_dev_build and _legacy_dir != BASE_DIR:
+        for _name in (".env", "curriculum_base.json", "jobs.db", "jobs.db-wal", "jobs.db-shm",
+                      "search_config.json", "github_selection.json", "presets.json", ".wizard_done",
+                      "output", "reports", "output_github", "output_github_test", "logs"):
+            _src, _dst = _legacy_dir / _name, BASE_DIR / _name
+            if _src.exists() and not _dst.exists():
+                try:
+                    shutil.move(str(_src), str(_dst))
+                except Exception:
+                    pass
 else:
-    BASE_DIR = Path(__file__).resolve().parent.parent
+    BASE_DIR = _project_root
 env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(env_path)
