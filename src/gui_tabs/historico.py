@@ -20,6 +20,7 @@ class HistoricoTabMixin:
         top=tb.Frame(f); top.pack(fill=X,pady=5)
         tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga").pack(side=LEFT,padx=5)
         tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_hist).pack(side=RIGHT,padx=5)
+        tb.Button(top,text="🗑 Limpar Histórico",bootstyle="danger-outline",command=self.clear_history).pack(side=RIGHT,padx=5)
         actions=tb.Frame(f); actions.pack(fill=X,pady=(0,5))
         tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected).pack(side=LEFT,padx=5)
         info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side=LEFT)
@@ -89,5 +90,24 @@ class HistoricoTabMixin:
             except Exception as e: messagebox.showerror("Outcome",str(e))
             top.destroy()
         tb.Button(top,text="Salvar",bootstyle="success",command=save).pack(pady=12)
+    def clear_history(self):
+        if not messagebox.askyesno(
+            "Limpar Histórico",
+            "Isso apaga TODAS as vagas do Histórico e do Dashboard (banco de dados).\n"
+            "Não afeta seu currículo, configurações ou PDFs já gerados (ficam em output/).\n"
+            "Essa ação não pode ser desfeita. Continuar?",
+            icon="warning",
+        ):
+            return
+        try:
+            import sqlite3
+            con = sqlite3.connect(str(DB_PATH)); cur = con.cursor()
+            cur.execute("DELETE FROM jobs")
+            cur.execute("DELETE FROM sqlite_sequence WHERE name='jobs'")
+            con.commit(); con.close()
+            self._refresh_hist(); self._refresh_dashboard()
+            messagebox.showinfo("Limpar Histórico", "Histórico e Dashboard limpos.")
+        except Exception as e:
+            messagebox.showerror("Limpar Histórico", str(e))
 
     # Perfil GitHub
