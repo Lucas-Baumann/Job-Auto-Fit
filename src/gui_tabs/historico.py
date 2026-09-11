@@ -94,19 +94,37 @@ class HistoricoTabMixin:
         if not messagebox.askyesno(
             "Limpar Histórico",
             "Isso apaga TODAS as vagas do Histórico e do Dashboard (banco de dados).\n"
-            "Não afeta seu currículo, configurações ou PDFs já gerados (ficam em output/).\n"
             "Essa ação não pode ser desfeita. Continuar?",
             icon="warning",
         ):
             return
+        also_delete_files = messagebox.askyesno(
+            "Limpar Histórico",
+            "Também apagar os PDFs de currículo e cartas de apresentação gerados pra essas vagas (pasta output/)?\n"
+            "Se disser não, os arquivos ficam no disco (órfãos, sem vaga associada no histórico)."
+        )
         try:
             import sqlite3
             con = sqlite3.connect(str(DB_PATH)); cur = con.cursor()
+            if also_delete_files:
+                cur.execute("SELECT resume_pdf_path, cover_letter_path FROM jobs")
+                removed = 0
+                for resume_path, cover_path in cur.fetchall():
+                    for p in (resume_path, cover_path):
+                        if p:
+                            try:
+                                Path(p).unlink(missing_ok=True)
+                                removed += 1
+                            except Exception:
+                                pass
             cur.execute("DELETE FROM jobs")
             cur.execute("DELETE FROM sqlite_sequence WHERE name='jobs'")
             con.commit(); con.close()
             self._refresh_hist(); self._refresh_dashboard()
-            messagebox.showinfo("Limpar Histórico", "Histórico e Dashboard limpos.")
+            msg = "Histórico e Dashboard limpos."
+            if also_delete_files:
+                msg += f"\n{removed} arquivo(s) apagado(s) de output/."
+            messagebox.showinfo("Limpar Histórico", msg)
         except Exception as e:
             messagebox.showerror("Limpar Histórico", str(e))
 
