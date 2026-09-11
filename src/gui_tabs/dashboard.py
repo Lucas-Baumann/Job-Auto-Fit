@@ -39,6 +39,7 @@ class DashboardTabMixin:
             cur.execute("SELECT status, COUNT(*) c FROM jobs GROUP BY status"); rows=cur.fetchall()
             cur.execute("SELECT platform, COUNT(*) c FROM jobs GROUP BY platform"); rows2=cur.fetchall()
             cur.execute("SELECT outcome, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows3=cur.fetchall()
+            cur.execute("SELECT outcome, AVG(match_score) avg_score, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows4=cur.fetchall()
             con.close()
             txt=f"Por status:\n"
             for r in rows: txt+=f"  {r['status']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
@@ -47,6 +48,20 @@ class DashboardTabMixin:
             if rows3:
                 txt+="\nPor outcome (marcados manualmente):\n"
                 for r in rows3: txt+=f"  {r['outcome']:<14} {r['c']:>4} {'█'*min(30,r['c'])}\n"
+            if rows4:
+                # a IA realmente acerta? cruza a nota que ela deu com o resultado real da
+                # candidatura (marcado manualmente na aba Histórico) — nota média alta em
+                # "rejeitado"/"sem_resposta" e baixa em "entrevista"/"proposta" seria sinal de
+                # que o score não está prevendo bem quem realmente avança.
+                por_outcome={r["outcome"]:(r["avg_score"] or 0, r["c"]) for r in rows4}
+                total_marcados=sum(c for _,c in por_outcome.values())
+                txt+="\nMatch médio por outcome (a IA acerta?):\n"
+                for o in OUTCOME_OPTIONS:
+                    if o in por_outcome:
+                        avg,c=por_outcome[o]
+                        txt+=f"  {o:<14} {avg:>5.0f}%  (n={c})\n"
+                if total_marcados < 5:
+                    txt+=f"  (só {total_marcados} vaga(s) com outcome marcado ainda — poucos dados pra essa comparação ser confiável)\n"
             self.bars_text.delete("1.0",tk.END); self.bars_text.insert("1.0",txt)
         except Exception as e: pass
 
