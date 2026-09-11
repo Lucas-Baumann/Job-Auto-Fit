@@ -23,7 +23,7 @@ class IATabMixin:
         info_icon(row_prov, "Escolha a IA que reescreve seu currículo/Carta para o ATS.\n• gemini = gratuito (aistudio.google.com)\n• ollama = local gratuito\n• openai/claude/groq = pago\n• openrouter = free tier (openrouter.ai/keys) :free").pack(side=LEFT)
         self.btn_test_gemini=tb.Button(row_prov,text="Testar Conexão",bootstyle="success-outline",command=self.test_gemini); self.btn_test_gemini.pack(side=LEFT,padx=5)
         self.lbl_ai_status=tb.Label(card,text="",font=("Segoe UI",8,"bold")); self.lbl_ai_status.pack(anchor=W,pady=(6,0))
-        tb.Label(card,text="Gemini gratuito: aistudio.google.com/app/apikey — deixe em branco para heurístico.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W)
+        tb.Label(card,text="Gemini gratuito: aistudio.google.com/app/apikey — deixe em branco para heurístico.",font=("Segoe UI",8),bootstyle="light").pack(anchor=W)
         # container dinâmico — mostra só o provider selecionado
         self.frame_ia_dynamic=tb.Frame(card); self.frame_ia_dynamic.pack(fill=X,pady=6)
         self.frame_gemini=tb.Frame(self.frame_ia_dynamic)
@@ -62,15 +62,15 @@ class IATabMixin:
         self.var_llm_provider.trace_add("write", lambda *_: self._update_ai_state())
         self.after(300, self._update_ai_state)
         card2=tb.Labelframe(f,text="E-mail SMTP (envio automático, opcional)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
-        hdr2=tb.Frame(card2); hdr2.pack(fill=X); tb.Label(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr2, "SMTP = protocolo de envio de e-mail.\nGmail: smtp.gmail.com:587 + Senha de App (myaccount.google.com > Segurança > Senhas de app).\nOutlook: smtp.office365.com:587\nSe deixar vazio, o sistema só gera PDFs e relatório (não envia).").pack(side=LEFT,padx=4)
+        hdr2=tb.Frame(card2); hdr2.pack(fill=X); tb.Label(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT); info_icon(hdr2, "SMTP = protocolo de envio de e-mail.\nGmail: smtp.gmail.com:587 + Senha de App (myaccount.google.com > Segurança > Senhas de app).\nOutlook: smtp.office365.com:587\nSe deixar vazio, o sistema só gera PDFs e relatório (não envia).").pack(side=LEFT,padx=4)
         g=tb.Frame(card2); g.pack(fill=X, pady=(6,0)); g.columnconfigure(1,weight=1); g.columnconfigure(3,weight=1)
         tb.Label(g,text="Host").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_host).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(g,text="Porta").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_port,width=8).grid(row=0,column=3,sticky=W,padx=5,pady=3)
         tb.Label(g,text="Usuário").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_user).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(g,text="Senha / App Pass").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(card2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=("Segoe UI",8),bootstyle="secondary").pack(anchor=W, pady=(4,0))
+        tb.Label(card2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=("Segoe UI",8),bootstyle="light").pack(anchor=W, pady=(4,0))
         card3=tb.Labelframe(f,text="LinkedIn / Gupy (automação navegador, opcional)",padding=10,bootstyle="warning"); card3.pack(fill=X,pady=5)
-        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Playwright preenche formulários com ritmo humano; CAPTCHA/teste pausa para você",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT); info_icon(hdr3, "Automação de navegador real (Playwright).\nLinkedIn Easy Apply e Gupy: abre Chromium visível, clica em Candidatar-se e anexa PDF.\nPrecisa login. Deixe vazio para modo manual (só relatório).").pack(side=LEFT,padx=4)
+        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Playwright preenche formulários com ritmo humano; CAPTCHA/teste pausa para você",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT); info_icon(hdr3, "Automação de navegador real (Playwright).\nLinkedIn Easy Apply e Gupy: abre Chromium visível, clica em Candidatar-se e anexa PDF.\nPrecisa login. Deixe vazio para modo manual (só relatório).").pack(side=LEFT,padx=4)
         g2=tb.Frame(card3); g2.pack(fill=X); g2.columnconfigure(1,weight=1); g2.columnconfigure(3,weight=1)
         tb.Label(g2,text="LinkedIn Email").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_email).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
         tb.Label(g2,text="Senha").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_pass,show="*").grid(row=0,column=3,sticky=EW,padx=5,pady=3)
@@ -127,7 +127,7 @@ class IATabMixin:
             if ai_available:
                 self.lbl_ai_status.config(text=f"✓ IA habilitada ({p}) — reestruturação ATS e carta com IA ativas", bootstyle="success")
             else:
-                self.lbl_ai_status.config(text=f"○ IA desabilitada — preencha a chave de '{p}' acima para ativar (opcional). Sem chave usa heurístico e funções com IA ficam cinza.", bootstyle="secondary")
+                self.lbl_ai_status.config(text=f"○ IA desabilitada — preencha a chave de '{p}' acima para ativar (opcional). Sem chave usa heurístico e funções com IA ficam cinza.", bootstyle="light")
         for attr in ["btn_preview_ai"]:
             if hasattr(self, attr):
                 try: getattr(self, attr).config(state=NORMAL if ai_available else DISABLED)
@@ -136,7 +136,7 @@ class IATabMixin:
             if ai_available:
                 self.lbl_exec_ai.config(text=f"IA pronta ({p}) — currículos serão reestruturados com palavras-chave da vaga", bootstyle="success")
             else:
-                self.lbl_exec_ai.config(text="IA desabilitada — execução usará heurístico (sem reestruturação por IA). Preencha a chave para habilitar.", bootstyle="secondary")
+                self.lbl_exec_ai.config(text="IA desabilitada — execução usará heurístico (sem reestruturação por IA). Preencha a chave para habilitar.", bootstyle="light")
 
     def test_gemini(self):
         p=self.var_llm_provider.get()

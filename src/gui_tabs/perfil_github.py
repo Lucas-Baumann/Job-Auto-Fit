@@ -34,7 +34,7 @@ class PerfilGithubTabMixin:
         self.txt_profile_log=tk.Text(f,height=8,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
         self.txt_profile_log.insert("1.0","Pronto. Informe username e clique Analisar. O gerador usa a estética perfeita (dark tokyonight + summary-cards + snake picture) e analisa seu README antigo se existir.\n")
         row=tb.Frame(f); row.pack(fill=X,pady=4)
-        tb.Label(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT)
+        tb.Label(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT)
         # Repositórios
         card_repos=tb.Labelframe(f,text="Repositórios — selecione com ⭐ para reformular README",padding=8,bootstyle="warning"); card_repos.pack(fill=BOTH,expand=True,pady=5)
         top_repos=tb.Frame(card_repos); top_repos.pack(fill=X)
@@ -42,7 +42,7 @@ class PerfilGithubTabMixin:
         tb.Button(top_repos,text="✨ Reformular Selecionados (⭐)",bootstyle="warning",command=self.generate_selected_repos).pack(side=LEFT,padx=5)
         tb.Button(top_repos,text="🚀 Push Selecionados",bootstyle="success",command=self.push_selected_repos).pack(side=LEFT,padx=5)
         tb.Button(top_repos,text="📂 Abrir saída",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
-        tb.Label(top_repos,text="  Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",font=("Segoe UI",8),bootstyle="secondary").pack(side=LEFT,padx=5)
+        tb.Label(top_repos,text="  Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT,padx=5)
         cols_repos=("star","repo","lang","stars","readme")
         self.tree_repos=tb.Treeview(card_repos,columns=cols_repos,show="headings",height=7,bootstyle="warning")
         for c,t,w in [("star","⭐",30),("repo","Repositório",200),("lang","Lang",80),("stars","★",50),("readme","README?",80)]:
