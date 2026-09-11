@@ -1,6 +1,7 @@
 import re
 import time
 import os
+import json
 import requests
 import concurrent.futures
 from bs4 import BeautifulSoup
@@ -62,23 +63,31 @@ def extract_email(text: str) -> str:
     return filtered[0] if filtered else ""
 
 def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
-    """Coleta vagas públicas da plataforma Gupy via API de Busca."""
+    """Coleta vagas públicas da plataforma Gupy. A antiga API pública (portal.api.gupy.io)
+    passou a exigir Bearer token (401) — trocado para ler o __NEXT_DATA__ (JSON de hidratação
+    do Next.js) embutido na própria página pública de busca, que ainda mostra os dados reais
+    sem login."""
     jobs = []
-    url = f"https://portal.api.gupy.io/api/v1/jobs?jobName={requests.utils.quote(keywords)}&limit={limit}&offset=0"
-    
+    url = f"https://portal.gupy.io/job-search/term={requests.utils.quote(keywords)}"
     try:
         response = requests.get(url, headers=_headers(), timeout=10)
         if response.status_code == 200:
-            data = response.json()
-            results = data.get('data', [])
-            for item in results:
+            m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', response.text, re.S)
+            results = []
+            if m:
+                try:
+                    data = json.loads(m.group(1))
+                    results = data.get("props", {}).get("pageProps", {}).get("initialJobList", {}).get("data", [])
+                except Exception:
+                    results = []
+            for item in results[:limit]:
                 job_url = item.get('jobUrl') or f"https://vagas.gupy.io/job/{item.get('id')}"
                 description = item.get('description', '') or item.get('summary', '')
-                
+
                 # Buscar detalhes adicionais se descrição for curta
                 if not description or len(description) < 100:
                     description = f"Vaga: {item.get('name')}. Tipo: {item.get('type')}. Cidade: {item.get('city')}, {item.get('state')}."
-                
+
                 jobs.append({
                     'title': item.get('name', 'Sem título'),
                     'company': item.get('careerPageName', 'Empresa Gupy'),
@@ -86,11 +95,13 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
                     'url': job_url,
                     'platform': 'gupy',
                     'description': description,
-                    'contact_email': extract_email(description)
+                    'contact_email': extract_email(description),
+                    'published_at': item.get('publishedDate'),
                 })
     except Exception as e:
         print(f"[Collector] Erro ao buscar vagas na Gupy: {e}")
-    
+    if not jobs:
+        print(f"[Collector][Gupy] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
@@ -458,12 +469,15 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
             print(f"[Collector][Posts] Busca guest retornou {resp.status_code}")
             return jobs
 
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        # LinkedIn guest frequentemente redireciona para authwall — detectar
-        if "authwall" in resp.text.lower() or "login" in soup.title.text.lower() if soup.title else False:
-            # ainda tenta extrair links visíveis
-            pass
+        # LinkedIn redireciona busca de conteúdo pra tela de login sem sessão autenticada —
+        # sem login real (via Playwright) isso SEMPRE dá 0 posts, não é seletor desatualizado.
+        # (checagem antiga aqui nunca disparava por erro de precedência de operador: "or ... if
+        # ... else" sem parênteses avalia diferente do que parece.)
+        if "/uas/login" in resp.url or "/authwall" in resp.url or "/checkpoint/" in resp.url:
+            print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Configure LINKEDIN_EMAIL/LINKEDIN_PASSWORD + Playwright instalado para usar login real.")
+            return jobs
 
+        soup = BeautifulSoup(resp.text, 'html.parser')
         # Coleta links de posts: /posts/, /feed/update/, /pulse/
         post_links = []
         for a in soup.find_all('a', href=True):
@@ -548,11 +562,6 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
 def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List[Dict]:
     """Scraping via Playwright com login (se credenciais disponíveis)."""
     jobs: List[Dict] = []
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        return jobs
-
     linkedin_email = os.getenv("LINKEDIN_EMAIL", "")
     linkedin_pass = os.getenv("LINKEDIN_PASSWORD", "")
     # também verifica .env via config se disponível
@@ -564,6 +573,15 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
         except: pass
 
     if not linkedin_email or not linkedin_pass:
+        return jobs  # sem credenciais -> nem tenta, cai pro guest (comportamento normal)
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        # credenciais configuradas mas Playwright não instalado (ex: .exe empacotado não
+        # inclui o Playwright + Chromium — pesado demais pra empacotar). Sem este aviso, o
+        # usuário via só "Guest encontrou 0 posts" sem entender por que o login não ajudou.
+        print("[Collector][Posts] LINKEDIN_EMAIL/PASSWORD configurados, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login). Rode a partir do código-fonte com 'pip install playwright && playwright install chromium' para usar login real.")
         return jobs
 
     expanded = f"{keywords} vaga contratando"
