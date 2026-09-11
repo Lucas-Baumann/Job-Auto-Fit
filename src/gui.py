@@ -130,6 +130,25 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         self.curriculum["summary"]=self.txt_summary.get("1.0","end").strip(); save_curriculum(self.curriculum)
         self.env.update(GEMINI_API_KEY=self.var_gemini_key.get().strip(),GEMINI_MODEL=self.var_gemini_model.get().strip() or "gemini-flash-latest",LLM_PROVIDER=self.var_llm_provider.get().strip().lower(),OLLAMA_HOST=self.var_ollama_host.get().strip(),OLLAMA_MODEL=self.var_ollama_model.get().strip(),OPENAI_API_KEY=self.var_openai_key.get().strip(),CLAUDE_API_KEY=self.var_claude_key.get().strip(),GROQ_API_KEY=self.var_groq_key.get().strip(),OPENROUTER_API_KEY=self.var_openrouter_key.get().strip(),OPENROUTER_MODEL=self.var_openrouter_model.get().strip(),CUSTOM_LLM_URL=self.var_custom_url.get().strip(),CUSTOM_LLM_KEY=self.var_custom_key.get().strip(),GITHUB_TOKEN=self.var_github_token.get().strip(),SMTP_HOST=self.var_smtp_host.get().strip(),SMTP_PORT=self.var_smtp_port.get().strip(),SMTP_USER=self.var_smtp_user.get().strip(),SMTP_PASS=self.var_smtp_pass.get().strip(),LINKEDIN_EMAIL=self.var_linkedin_email.get().strip(),LINKEDIN_PASSWORD=self.var_linkedin_pass.get().strip(),GUPY_EMAIL=self.var_gupy_email.get().strip(),GUPY_PASSWORD=self.var_gupy_pass.get().strip(),WORK_MODE=self.var_work_mode.get().strip(),PRESENCIAL_LOCATION=self.var_presencial_loc.get().strip(),CONTRACT_TYPE=self.var_contract.get().strip(),TELEGRAM_BOT_TOKEN=self.var_telegram_token.get().strip(),TELEGRAM_CHAT_ID=self.var_telegram_chat.get().strip(),DAILY_LIMIT=str(int(self.var_daily_limit.get())))
         save_env_dict(self.env)
+        # No .exe, "Executar Automação" roda run_pipeline() no MESMO processo (sem subprocess
+        # python.exe separado, que não existe empacotado) — sem isto, Config.LLM_PROVIDER e as
+        # chaves ficavam travadas no valor de quando o app abriu até reiniciar, então trocar de
+        # provedor/chave na aba IA e rodar sem reiniciar continuava usando o provedor antigo
+        # (ex: log mostrando "GEMINI" mesmo com OpenRouter selecionado e salvo).
+        os.environ.update(self.env)
+        Config.LLM_PROVIDER = self.env.get("LLM_PROVIDER","gemini").lower()
+        Config.GEMINI_API_KEY = self.env.get("GEMINI_API_KEY","")
+        Config.GEMINI_MODEL = self.env.get("GEMINI_MODEL") or "gemini-flash-latest"
+        Config.OLLAMA_HOST = self.env.get("OLLAMA_HOST","http://localhost:11434")
+        Config.OLLAMA_MODEL = self.env.get("OLLAMA_MODEL","llama3:latest")
+        Config.OPENAI_API_KEY = self.env.get("OPENAI_API_KEY","")
+        Config.CLAUDE_API_KEY = self.env.get("CLAUDE_API_KEY","")
+        Config.GROQ_API_KEY = self.env.get("GROQ_API_KEY","")
+        Config.OPENROUTER_API_KEY = self.env.get("OPENROUTER_API_KEY","")
+        Config.OPENROUTER_MODEL = self.env.get("OPENROUTER_MODEL") or "minimax/minimax-m3:free"
+        Config.CUSTOM_LLM_URL = self.env.get("CUSTOM_LLM_URL","")
+        Config.CUSTOM_LLM_KEY = self.env.get("CUSTOM_LLM_KEY","")
+        Config.GITHUB_TOKEN = self.env.get("GITHUB_TOKEN","")
         cfg={"keywords":[k.strip() for k in self.var_keywords.get().split(",") if k.strip()],"work_mode":self.var_work_mode.get(),"presencial_location":self.var_presencial_loc.get().strip(),"contract_type":self.var_contract.get(),"min_score":int(self.var_min_score.get()),"limit_per_source":int(self.var_limit.get()),"min_salary":int(self.var_min_salary.get()),"level":self.var_level.get(),"exclude_keywords":[k.strip() for k in self.var_exclude.get().split(",") if k.strip()],"mandatory_words":[k.strip() for k in self.var_mandatory.get().split(",") if k.strip()],"blocked_companies":[k.strip() for k in self.var_blocked.get().split(",") if k.strip()],"favorite_companies":[k.strip() for k in self.var_fav.get().split(",") if k.strip()],"max_age_days":int(self.var_max_age.get()),"only_pcd":bool(self.var_only_pcd.get()),"english_filter":self.var_english.get(),"daily_limit":int(self.var_daily_limit.get()),"telegram_bot_token":self.var_telegram_token.get().strip(),"telegram_chat_id":self.var_telegram_chat.get().strip(),"schedule_enabled":bool(self.var_schedule_enabled.get()),"schedule_hour":self.var_schedule_hour.get().strip(),"enable_linkedin_posts":bool(self.var_enable_linkedin_posts.get()),"linkedin_posts_limit":int(self.var_linkedin_posts_limit.get()),"auto_send":bool(self.var_auto_send.get())}
         save_search_config(cfg); self.search_cfg=cfg
         if not silent: messagebox.showinfo("Salvo","Salvo em curriculum_base.json, .env, search_config.json")
