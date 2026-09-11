@@ -69,6 +69,44 @@ def requires_us_location(text: str) -> bool:
         r"require[sd]? u\.?s\.?\s*citizenship",
     ])
 
+# Códigos de 2 letras dos EUA que NÃO colidem com sigla de estado brasileiro (ex: "PA" é
+# Pensilvânia nos EUA E Pará no Brasil — ambíguo demais, melhor não usar sigla sozinha nesses
+# casos e confiar só no nome completo/menção ao país). Evita rejeitar vaga brasileira de
+# Alagoas/Maranhão/Mato Grosso/Mato Grosso do Sul/Pará/Santa Catarina por engano.
+_US_STATE_CODES_UNAMBIGUOUS = {
+    "AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA",
+    "ME","MD","MI","MN","MO","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","RI",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
+}
+_US_STATE_NAMES = [
+    "alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware",
+    "florida","georgia","hawaii","idaho","illinois","indiana","iowa","kansas","kentucky",
+    "louisiana","maine","maryland","massachusetts","michigan","minnesota","mississippi",
+    "missouri","montana","nebraska","nevada","new hampshire","new jersey","new mexico",
+    "new york","north carolina","north dakota","ohio","oklahoma","oregon","pennsylvania",
+    "rhode island","south carolina","south dakota","tennessee","texas","utah","vermont",
+    "virginia","washington","west virginia","wisconsin","wyoming",
+]
+
+def is_foreign_job_location(location: str, title: str = "") -> bool:
+    """Detecta vaga situada no exterior (hoje, na prática, quase sempre EUA vindo do LinkedIn)
+    pelo campo location/título — diferente de requires_us_location() (que olha o texto da
+    descrição): aqui pega vaga cuja localização já é claramente estrangeira mesmo quando a
+    descrição não usa nenhuma das frases-padrão de "só EUA". NÃO barra vaga remota brasileira
+    que aceita candidato no exterior — só barra quando a VAGA em si está localizada lá fora."""
+    combined = f"{location} {title}".lower()
+    if not combined.strip():
+        return False
+    if any(k in combined for k in ["estados unidos", "united states", " usa", "u.s.a"]):
+        return True
+    if any(name in combined for name in _US_STATE_NAMES):
+        return True
+    # padrão "Cidade, XX" (ou "Cidade, XX/", como em títulos com duas localizações)
+    for code in re.findall(r",\s*([A-Za-z]{2})\b", location + " " + title):
+        if code.upper() in _US_STATE_CODES_UNAMBIGUOUS:
+            return True
+    return False
+
 def parse_published_days(job: Dict) -> int | None:
     """Tenta extrair idade da vaga em dias (se tiver campo). Retorna None se não disponível."""
     for key in ["publication_date","published_at","created_at","date_posted"]:
@@ -168,6 +206,12 @@ def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
     # que "vazam" pra buscas genéricas tipo "Python Developer" — inaplicável no Brasil)
     if requires_us_location(desc):
         return False, "exige_localizacao_eua"
+
+    # 8.6. Vaga está fisicamente no exterior (campo location/título), mesmo quando a descrição
+    # não usa nenhuma frase-padrão de "só EUA" — ex: "Reston, Virginia" ou "Tampa, FL" direto
+    # no location, sem "authorized to work..." em lugar nenhum do texto.
+    if is_foreign_job_location(job.get("location",""), title):
+        return False, "vaga_no_exterior"
 
     # 9. Idade da vaga
     max_age = int(cfg.get("max_age_days",0) or 0)
