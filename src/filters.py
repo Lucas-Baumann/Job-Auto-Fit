@@ -88,6 +88,21 @@ _US_STATE_NAMES = [
     "virginia","washington","west virginia","wisconsin","wyoming",
 ]
 
+# Cidades dos EUA nos estados "ambíguos" acima (AL/MA/MT/MS/PA/SC), pra quando o LinkedIn
+# manda location sem sigla de estado nem nome do país — ex: "Mobile" ou "Mobile Metropolitan
+# Area" (Mobile, Alabama) passava direto pelo filtro porque AL foi deliberadamente excluído
+# de _US_STATE_CODES_UNAMBIGUOUS. Checado SÓ no campo location (nunca junto com o título),
+# pra não confundir com título de vaga brasileira tipo "Desenvolvedor Mobile" (sobre
+# desenvolvimento mobile, nada a ver com a cidade dos EUA).
+_US_AMBIGUOUS_STATE_CITIES = [
+    "mobile", "birmingham", "huntsville", "tuscaloosa", "hoover",  # Alabama
+    "boston", "cambridge", "worcester", "lowell", "quincy",  # Massachusetts
+    "billings", "missoula", "bozeman", "great falls", "helena",  # Montana
+    "gulfport", "biloxi", "hattiesburg", "southaven",  # Mississippi
+    "philadelphia", "pittsburgh", "allentown", "erie",  # Pennsylvania
+    "charleston", "spartanburg", "myrtle beach",  # South Carolina
+]
+
 def is_foreign_job_location(location: str, title: str = "") -> bool:
     """Detecta vaga situada no exterior (hoje, na prática, quase sempre EUA vindo do LinkedIn)
     pelo campo location/título — diferente de requires_us_location() (que olha o texto da
@@ -105,6 +120,9 @@ def is_foreign_job_location(location: str, title: str = "") -> bool:
     for code in re.findall(r",\s*([A-Za-z]{2})\b", location + " " + title):
         if code.upper() in _US_STATE_CODES_UNAMBIGUOUS:
             return True
+    loc_l = (location or "").lower()
+    if any(re.search(r"\b" + re.escape(city) + r"\b", loc_l) for city in _US_AMBIGUOUS_STATE_CITIES):
+        return True
     return False
 
 def parse_published_days(job: Dict) -> int | None:
