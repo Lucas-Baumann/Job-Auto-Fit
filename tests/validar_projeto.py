@@ -55,12 +55,13 @@ try:
 except Exception as e:
     fail("CURRICULUM", str(e))
 
-# 4. DB (com URL única para evitar duplicata)
+# 4. DB (com location única pra evitar duplicata -- job_hash não usa mais a URL desde o fix
+# de dedup entre fontes diferentes, ver db.generate_job_hash)
 try:
     from db import init_db, save_job
     init_db()
     import time
-    jid = save_job({"title":"Validacao","company":"Auto","url":f"http://v/{time.time()}","platform":"v","description":"v"})
+    jid = save_job({"title":"Validacao","company":"Auto","location":f"Local-{time.time()}","url":f"http://v/{time.time()}","platform":"v","description":"v"})
     if jid > 0:
         ok("DB", f"init+sav OK (id={jid})")
     else:

@@ -196,42 +196,6 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         
     return jobs
 
-def _scrape_simple_board(keywords: str, limit: int, url_template: str, base_domain: str,
-                          card_selectors: str, find_title, company_name: str, platform: str) -> List[Dict]:
-    """Scraping genérico para sites de vaga sem API (seletores CSS 'chutados', sem contrato
-    estável) — InfoJobs e Catho tinham o mesmo laço copiado/colado; só difere URL/seletores/
-    como acha o título. Ajuda a saber quando um seletor quebrou: loga quando dá 0 resultado."""
-    jobs = []
-    url = url_template.format(kw=requests.utils.quote(keywords))
-    try:
-        resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            cards = soup.select(card_selectors)[:limit]
-            for card in cards:
-                title_el = find_title(card)
-                title = title_el.get_text(strip=True) if title_el else keywords.title()
-                link_el = card.find("a", href=True)
-                job_url = link_el["href"] if link_el else url
-                if job_url and job_url.startswith("/"):
-                    job_url = base_domain + job_url
-                desc = card.get_text(separator=' ', strip=True)[:800]
-                jobs.append({
-                    'title': title[:90],
-                    'company': company_name,
-                    'location': "Brasil",
-                    'url': job_url,
-                    'platform': platform,
-                    'description': desc,
-                    'contact_email': extract_email(desc)
-                })
-                time.sleep(0.5)
-    except Exception as e:
-        print(f"[Collector] {company_name} erro: {e}")
-    if not jobs:
-        print(f"[Collector][{company_name}] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
-    return jobs
-
 def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas do InfoJobs.
 
@@ -293,15 +257,54 @@ def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     return jobs
 
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas públicas da Catho."""
-    return _scrape_simple_board(
-        keywords, limit,
-        url_template="https://www.catho.com.br/vagas/?q={kw}",
-        base_domain="https://www.catho.com.br",
-        card_selectors="li.BoxVaga, div.vaga, article",
-        find_title=lambda card: card.find(["h2","h3"]) or card.find("a", class_=re.compile(r"title", re.I)),
-        company_name="Catho", platform="catho",
-    )
+    """Coleta vagas públicas da Catho, com empresa/localização reais por vaga.
+
+    Antes usava o helper genérico _scrape_simple_board, que fixa 'Catho'/'Brasil' pra
+    qualquer vaga (mesma limitação que o InfoJobs tinha) — enfraquecia os filtros de
+    vaga_no_exterior/vaga_antiga pra essa fonte. 'Cliente'/'Empresa Confidencial' como nome
+    da empresa é um valor real do site (o próprio anunciante escolheu não se identificar),
+    não um bug do scraper."""
+    jobs = []
+    url = f"https://www.catho.com.br/vagas/?q={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select("article")[:limit]
+            for card in cards:
+                title_el = card.select_one('h2.title_offer a') or card.find('a', href=True)
+                title = title_el.get_text(strip=True) if title_el else keywords.title()
+                job_url = title_el.get('href', '') if title_el else ''
+                if job_url.startswith('/'):
+                    job_url = "https://www.catho.com.br" + job_url
+
+                comp_el = card.select_one('p.mb-2 span.text-12')
+                company = comp_el.get_text(strip=True) if comp_el else "Catho"
+
+                location = "Brasil"
+                loc_icon = card.select_one('span.icon.i_job_location')
+                if loc_icon:
+                    loc_p = loc_icon.find_parent('p')
+                    if loc_p:
+                        loc_text = loc_p.get_text(' ', strip=True)
+                        location = re.sub(r'^\d+\s*vagas?\s*-\s*', '', loc_text).strip() or "Brasil"
+
+                desc = card.get_text(separator=' ', strip=True)[:1200]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company[:120],
+                    'location': location,
+                    'url': job_url or url,
+                    'platform': 'catho',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                jitter_sleep(0.5, 0.3)
+    except Exception as e:
+        print(f"[Collector] Catho erro: {e}")
+    if not jobs:
+        print(f"[Collector][Catho] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+    return jobs
 
 def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas do Vagas.com. A busca é por slug na URL
@@ -400,49 +403,57 @@ def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     return jobs
 
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas de TI do Programathor (focado em dev)."""
+    """Coleta vagas de TI do Programathor (focado em dev), com empresa/localização reais.
+
+    Antes fixava 'Programathor'/'Brasil' pra qualquer vaga (mesma limitação do InfoJobs/Catho
+    antigos). Cada card é um <div class="cell-list"> com um <a href="/jobs/ID-slug"> por
+    dentro contendo h3 (título) e um bloco de spans com ícone+texto (empresa = ícone
+    fa-briefcase, local = ícone fa-map-marker-alt).
+
+    LIMITAÇÃO CONHECIDA (não introduzida agora, só descoberta agora ao comparar resultado de
+    duas keywords diferentes): ?q= NÃO filtra por palavra-chave nesse site — testado com
+    vários termos (inclusive 'cozinheiro', bem fora de tech) e todos devolvem exatamente os
+    mesmos ~16 cards, byte a byte quase idênticos. A página /jobs só tem filtro real por
+    facetas fixas (contract_type, nível, tamanho de empresa, remoto/presencial, cidade), sem
+    nenhum campo de busca textual livre — não existe um parâmetro correto pra descobrir, o
+    site simplesmente não expõe busca por termo aqui. Na prática esta fonte hoje é "vagas
+    recentes de tech em geral", não filtrada por keyword; mantido assim (documentado) em vez
+    de fingir que filtra."""
     jobs = []
-    # Programathor: https://programathor.com.br/jobs?q=python
     url = f"https://programathor.com.br/jobs?q={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
-            cards = soup.select("div.job, li.job, article.job")[:limit]
-            if not cards:
-                cards = soup.find_all("a", href=re.compile(r"/jobs/"))[:limit]
-                for a in cards:
-                    title = a.get_text(strip=True) or keywords.title()
-                    job_url = a["href"]
-                    if job_url.startswith("/"): job_url = "https://programathor.com.br" + job_url
-                    desc = a.parent.get_text(separator=' ', strip=True)[:800] if a.parent else title
-                    jobs.append({
-                        'title': title[:90],
-                        'company': "Programathor",
-                        'location': "Brasil",
-                        'url': job_url,
-                        'platform': 'programathor',
-                        'description': desc,
-                        'contact_email': extract_email(desc)
-                    })
-            else:
-                for card in cards:
-                    title_el = card.find(["h2","h3","a"])
-                    title = title_el.get_text(strip=True) if title_el else keywords.title()
-                    link_el = card.find("a", href=True)
-                    job_url = link_el["href"] if link_el else url
-                    if job_url.startswith("/"): job_url = "https://programathor.com.br" + job_url
-                    desc = card.get_text(separator=' ', strip=True)[:800]
-                    jobs.append({
-                        'title': title[:90],
-                        'company': "Programathor",
-                        'location': "Brasil",
-                        'url': job_url,
-                        'platform': 'programathor',
-                        'description': desc,
-                        'contact_email': extract_email(desc)
-                    })
-            time.sleep(0.5)
+            cards = soup.select("div.cell-list")[:limit]
+            for card in cards:
+                link_el = card.find("a", href=re.compile(r"^/jobs/\d"))
+                job_url = link_el["href"] if link_el else ""
+                if job_url.startswith("/"):
+                    job_url = "https://programathor.com.br" + job_url
+
+                title_el = card.find("h3")
+                title = title_el.get_text(strip=True) if title_el else keywords.title()
+
+                company, location = "Programathor", "Brasil"
+                briefcase = card.select_one("i.fa-briefcase")
+                if briefcase and briefcase.parent:
+                    company = briefcase.parent.get_text(strip=True) or company
+                marker = card.select_one("i.fa-map-marker-alt")
+                if marker and marker.parent:
+                    location = marker.parent.get_text(" ", strip=True) or location
+
+                desc = card.get_text(separator=' ', strip=True)[:1200]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company[:120],
+                    'location': location,
+                    'url': job_url or url,
+                    'platform': 'programathor',
+                    'description': desc,
+                    'contact_email': extract_email(desc)
+                })
+                jitter_sleep(0.5, 0.3)
     except Exception as e:
         print(f"[Collector] Programathor erro: {e}")
     if not jobs:
