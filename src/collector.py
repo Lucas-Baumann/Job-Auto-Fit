@@ -2,6 +2,7 @@ import re
 import time
 import os
 import json
+import unicodedata
 import requests
 import concurrent.futures
 from bs4 import BeautifulSoup
@@ -259,7 +260,10 @@ def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     tipo 'react native' costumam não ter slug próprio no site (0 resultado real, não é
     bug do scraper: tente termos mais genéricos como 'desenvolvedor mobile')."""
     jobs = []
-    slug = re.sub(r"[^a-z0-9]+", "-", keywords.lower()).strip("-")
+    # dobra acento antes de montar o slug (ex: "Júnior" virava "j-nior" — "ú" não bate em
+    # [a-z0-9] e virava separador, gerando URL errada que nunca tem vaga real)
+    ascii_kw = unicodedata.normalize("NFKD", keywords).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_kw.lower()).strip("-")
     url = f"https://www.vagas.com.br/vagas-de-{slug}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
