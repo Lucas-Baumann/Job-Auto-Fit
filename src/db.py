@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import unicodedata
 from datetime import datetime
 from config import Config
 
@@ -56,8 +57,23 @@ def init_db():
     conn.commit()
     conn.close()
 
-def generate_job_hash(title: str, company: str, url: str) -> str:
-    raw = f"{title.lower()}:{company.lower()}:{url.lower()}"
+def _normalize_for_hash(s: str) -> str:
+    """Minúsculo, sem acento, sem espaço duplicado — pra 'São Paulo - SP' e 'sao paulo-sp'
+    (formatação varia de fonte pra fonte) caírem na mesma chave de dedup."""
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode("ascii")
+    return " ".join(s.lower().split())
+
+def generate_job_hash(title: str, company: str, url: str, location: str = "") -> str:
+    """Chave de deduplicação: título+empresa+localização normalizados — NÃO inclui a URL.
+    Antes incluía a URL, então a MESMA vaga publicada em dois boards diferentes (ex: Gupy e
+    InfoJobs, cada um com sua própria URL) passava como "vaga nova" nas duas, inflando as
+    métricas do Dashboard e arriscando mandar duas candidaturas pro mesmo recrutador — mais
+    provável agora que InfoJobs/GeekHunter voltaram a funcionar e rodam mais fontes em
+    paralelo por busca. Location entra na chave (em vez de só título+empresa) pra não fundir
+    duas vagas genuinamente diferentes que só coincidem nesses dois campos (ex: mesma empresa
+    abrindo a mesma vaga em cidades diferentes ao mesmo tempo). O parâmetro url é mantido por
+    compatibilidade de assinatura, mas não entra mais no hash."""
+    raw = f"{_normalize_for_hash(title)}:{_normalize_for_hash(company)}:{_normalize_for_hash(location)}"
     return hashlib.md5(raw.encode('utf-8')).hexdigest()
 
 def is_job_processed(job_hash: str) -> bool:
@@ -69,7 +85,7 @@ def is_job_processed(job_hash: str) -> bool:
     return row is not None
 
 def save_job(job_data: dict) -> int:
-    job_hash = generate_job_hash(job_data['title'], job_data['company'], job_data.get('url', ''))
+    job_hash = generate_job_hash(job_data['title'], job_data['company'], job_data.get('url', ''), job_data.get('location', ''))
     if is_job_processed(job_hash):
         return -1
     
