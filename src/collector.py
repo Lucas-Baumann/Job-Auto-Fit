@@ -726,6 +726,79 @@ def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]
     print(f"[Collector][Posts] Guest encontrou {len(jobs)} posts")
     return jobs
 
+def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
+    """Coleta vagas de tecnologia do GeekHunter.
+
+    Reavaliado nesta sessão: a versão antiga do site (geekhunter.com.br) tinha busca sem
+    refletir o termo na URL — avaliada como inviável na época (todo termo devolvia o mesmo
+    feed genérico). O site migrou pra geekhunter.com/pt (app Next.js novo) e a busca agora
+    REALMENTE filtra via ?searchTerm=, com o resultado embutido em JSON-LD server-side
+    (<script id="itemList" type="application/ld+json">, schema.org ItemList) — nada de
+    Playwright necessário. Confirmado testando termos bem diferentes ('engenheiro de dados'
+    x 'devops' x 'cozinheiro', esse último sem NENHUM resultado real por ser fora de tech,
+    já que o GeekHunter é só vagas de tecnologia) e comparando títulos/URLs retornados.
+
+    A busca só devolve título+URL por vaga; empresa/descrição/data real vêm de um segundo
+    schema (JobPosting) na página de detalhe de cada vaga — mesmo padrão de segunda chamada
+    já usado em fetch_linkedin_job_details.
+    """
+    jobs = []
+    url = f"https://www.geekhunter.com/pt/vagas?searchTerm={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        if resp.status_code == 200:
+            m = re.search(r'<script id="itemList" type="application/ld\+json">(.*?)</script>', resp.text, re.S)
+            item_list = []
+            if m:
+                try:
+                    item_list = json.loads(m.group(1)).get("itemListElement", [])
+                except Exception:
+                    item_list = []
+            for item in item_list[:limit]:
+                job_url = item.get("url", "")
+                title = item.get("name", keywords.title())
+                company, location, desc, published_at = "GeekHunter", "Brasil", "", None
+                try:
+                    d = requests.get(job_url, headers=_headers(), timeout=10)
+                    if d.status_code == 200:
+                        for block in re.findall(r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', d.text, re.S):
+                            try:
+                                obj = json.loads(block)
+                            except Exception:
+                                continue
+                            if obj.get("@type") == "JobPosting":
+                                company = (obj.get("hiringOrganization") or {}).get("name") or company
+                                desc = re.sub(r"<[^>]+>", " ", obj.get("description", ""))
+                                published_at = obj.get("datePosted")
+                                if obj.get("jobLocationType") == "TELECOMMUTE":
+                                    location = "Remoto"
+                                jl = obj.get("jobLocation")
+                                if isinstance(jl, dict):
+                                    addr = jl.get("address", {}) or {}
+                                    cidade = addr.get("addressLocality", "")
+                                    uf = addr.get("addressRegion", "")
+                                    if cidade:
+                                        location = f"{cidade} - {uf}" if uf else cidade
+                                break
+                except Exception:
+                    pass
+                jobs.append({
+                    'title': title[:90],
+                    'company': company[:120],
+                    'location': location,
+                    'url': job_url or url,
+                    'platform': 'geekhunter',
+                    'description': (desc[:1500] if desc else title),
+                    'published_at': published_at,
+                    'contact_email': extract_email(desc)
+                })
+                jitter_sleep(0.4, 0.3)
+    except Exception as e:
+        print(f"[Collector] GeekHunter erro: {e}")
+    if not jobs:
+        print(f"[Collector][GeekHunter] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real (site é focado em vagas de tecnologia).")
+    return jobs
+
 def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_per_source: int = 10, enable_linkedin_posts: bool = True, linkedin_posts_limit: int = None) -> List[Dict]:
     """Orquestra a coleta em múltiplas fontes gratuitas."""
     all_jobs = []
@@ -748,6 +821,7 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
             "Programathor": lambda: fetch_programathor_jobs(kw, limit=max(1, limit_per_source//2)),
             "VagasCom": lambda: fetch_vagascom_jobs(kw, limit=max(1, limit_per_source//2)),
             "WeWorkRemotely": lambda: fetch_wwr_jobs(kw, limit=max(1, limit_per_source//2)),
+            "GeekHunter": lambda: fetch_geekhunter_jobs(kw, limit=max(1, limit_per_source//2)),
         }
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(parallel_sources)) as pool:
             futures = {pool.submit(fn): name for name, fn in parallel_sources.items()}

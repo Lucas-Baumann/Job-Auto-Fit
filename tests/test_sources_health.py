@@ -12,6 +12,11 @@ InfoJobs entrou de volta na lista (estava fora, documentado como quebrado — a 
 o parâmetro de URL errado, 'palavra' em vez de 'palabra'/espanhol, e por isso ignorava
 qualquer termo buscado; corrigido em fetch_infojobs_jobs).
 
+GeekHunter também entrou: reavaliado nesta sessão, o site migrou pra um app novo
+(geekhunter.com/pt) cuja busca agora filtra de verdade via JSON-LD server-side — não
+precisou de Playwright, ao contrário do que a avaliação anterior (no domínio antigo)
+tinha concluído.
+
 Sai com código 0 se todas as fontes retornaram vaga, 1 se alguma falhou.
 """
 import sys, pathlib
@@ -22,6 +27,7 @@ sys.path.insert(0, str(BASE / "src"))
 from collector import (
     fetch_gupy_jobs, fetch_remotive_jobs, fetch_catho_jobs, fetch_infojobs_jobs,
     fetch_programathor_jobs, fetch_vagascom_jobs, fetch_wwr_jobs, fetch_linkedin_jobs,
+    fetch_geekhunter_jobs,
 )
 
 # termo genérico o bastante pra sempre ter resultado real em qualquer fonte, brasileira
@@ -35,6 +41,7 @@ FONTES = [
     ("Vagas.com", lambda: fetch_vagascom_jobs("desenvolvedor", limit=3)),
     ("We Work Remotely", lambda: fetch_wwr_jobs("developer", limit=3)),
     ("LinkedIn Jobs", lambda: fetch_linkedin_jobs("desenvolvedor", limit=3)),
+    ("GeekHunter", lambda: fetch_geekhunter_jobs("desenvolvedor", limit=3)),
 ]
 
 def main():
