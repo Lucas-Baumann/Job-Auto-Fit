@@ -8,9 +8,9 @@ desatualizou (foi assim que descobrimos o Gupy e o InfoJobs quebrados nesta sess
 testando manualmente vaga por vaga). Rode antes de uma busca real, ou sempre que os
 resultados parecerem baixos demais, pra saber rápido qual fonte parou de funcionar.
 
-Não cobre InfoJobs: já documentado como quebrado (busca deles não filtra mais por
-URL/query string, ver comentário em fetch_infojobs_jobs) — incluir aqui só criaria
-ruído permanente por um problema já conhecido e sem solução encontrada até agora.
+InfoJobs entrou de volta na lista (estava fora, documentado como quebrado — a busca usava
+o parâmetro de URL errado, 'palavra' em vez de 'palabra'/espanhol, e por isso ignorava
+qualquer termo buscado; corrigido em fetch_infojobs_jobs).
 
 Sai com código 0 se todas as fontes retornaram vaga, 1 se alguma falhou.
 """
@@ -20,7 +20,7 @@ BASE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))
 
 from collector import (
-    fetch_gupy_jobs, fetch_remotive_jobs, fetch_catho_jobs,
+    fetch_gupy_jobs, fetch_remotive_jobs, fetch_catho_jobs, fetch_infojobs_jobs,
     fetch_programathor_jobs, fetch_vagascom_jobs, fetch_wwr_jobs, fetch_linkedin_jobs,
 )
 
@@ -29,6 +29,7 @@ from collector import (
 FONTES = [
     ("Gupy", lambda: fetch_gupy_jobs("desenvolvedor", limit=3)),
     ("Remotive", lambda: fetch_remotive_jobs("developer", limit=3)),
+    ("InfoJobs", lambda: fetch_infojobs_jobs("desenvolvedor", limit=3)),
     ("Catho", lambda: fetch_catho_jobs("desenvolvedor", limit=3)),
     ("Programathor", lambda: fetch_programathor_jobs("desenvolvedor", limit=3)),
     ("Vagas.com", lambda: fetch_vagascom_jobs("desenvolvedor", limit=3)),

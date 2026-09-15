@@ -233,15 +233,64 @@ def _scrape_simple_board(keywords: str, limit: int, url_template: str, base_doma
     return jobs
 
 def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas públicas do InfoJobs (scraping leve)."""
-    return _scrape_simple_board(
-        keywords, limit,
-        url_template="https://www.infojobs.com.br/empregos.aspx?palavra={kw}",
-        base_domain="https://www.infojobs.com.br",
-        card_selectors="div.element-vaga, article.vaga, div.card-vaga",
-        find_title=lambda card: card.find(["h2","h3","a"], class_=re.compile(r"title|vaga", re.I)) or card.find("a"),
-        company_name="InfoJobs", platform="infojobs",
-    )
+    """Coleta vagas públicas do InfoJobs.
+
+    Motivo de estar quebrado antes: o parâmetro de busca da URL é 'palabra' (grafia em
+    espanhol — a InfoJobs é originalmente espanhola), não 'palavra' (português). Com o nome
+    errado, o site simplesmente ignora o termo de busca e devolve sempre a mesma página
+    genérica — confirmado comparando duas buscas com termos bem diferentes ('engenheiro de
+    dados' vs 'cozinheiro') e vendo hash idêntico do HTML com 'palavra', e hash diferente (com
+    vagas reais e corretas de cada termo) com 'palabra'. Não precisa de Playwright/JS: o HTML
+    já vem filtrado e renderizado server-side com o parâmetro certo.
+    """
+    jobs = []
+    url = f"https://www.infojobs.com.br/empregos.aspx?palabra={requests.utils.quote(keywords)}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.select('div[id^="vacancy"]')[:limit]
+            for card in cards:
+                title_el = card.find(class_='js_vacancyTitle')
+                title = title_el.get_text(strip=True) if title_el else keywords.title()
+
+                job_url = card.get('data-href', '')
+                if not job_url:
+                    link_el = card.find('a', href=True)
+                    job_url = link_el['href'] if link_el else ''
+                if job_url and job_url.startswith('/'):
+                    job_url = "https://www.infojobs.com.br" + job_url
+
+                company_el = card.find('a', href=re.compile(r'/empresa-'))
+                company = company_el.get_text(' ', strip=True) if company_el else "InfoJobs"
+
+                loc_el = card.find('div', class_='mb-8')
+                location = loc_el.contents[0].strip() if loc_el and loc_el.contents else "Brasil"
+
+                published_at = None
+                date_el = card.find(class_='js_date')
+                if date_el and date_el.get('data-value'):
+                    m = re.match(r"(\d{4})/(\d{2})/(\d{2})\s+(\d{2}:\d{2}:\d{2})", date_el['data-value'])
+                    if m:
+                        published_at = f"{m.group(1)}-{m.group(2)}-{m.group(3)}T{m.group(4)}"
+
+                desc = card.get_text(separator=' ', strip=True)[:1200]
+                jobs.append({
+                    'title': title[:90],
+                    'company': company[:120],
+                    'location': location,
+                    'url': job_url or url,
+                    'platform': 'infojobs',
+                    'description': desc,
+                    'published_at': published_at,
+                    'contact_email': extract_email(desc)
+                })
+                jitter_sleep(0.5, 0.3)
+    except Exception as e:
+        print(f"[Collector] InfoJobs erro: {e}")
+    if not jobs:
+        print(f"[Collector][InfoJobs] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+    return jobs
 
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas da Catho."""
