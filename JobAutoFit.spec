@@ -20,6 +20,12 @@ tmp = collect_all('ttkbootstrap')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 tmp = collect_all('reportlab')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
+# Inclui o driver do Playwright E o Chromium baixado (o workflow de build roda
+# 'playwright install chromium' com PLAYWRIGHT_BROWSERS_PATH=0 ANTES deste build, o que grava
+# o navegador dentro de site-packages/playwright/driver/package/.local-browsers — daí o
+# collect_all pega o navegador junto, como se fosse dado normal do pacote).
+tmp = collect_all('playwright')
+datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 
 a = Analysis(
     ['gui.py'],

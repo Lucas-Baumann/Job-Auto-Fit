@@ -646,7 +646,16 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
                     continue
             browser.close()
     except Exception as e:
-        print(f"[Collector][Posts] Playwright erro: {e}")
+        msg = str(e)
+        # No Linux, o Chromium bundlado no .exe roda mas depende de bibliotecas do sistema
+        # operacional (libnss3, libatk etc.) que o PyInstaller NÃO empacota (só empacota o
+        # binário do navegador, não libs do SO) — variam por distro, então cada usuário Linux
+        # pode precisar instalar essas dependências manualmente. Sem esta mensagem, o erro cru
+        # do Playwright não deixa claro que o problema é do sistema, não do app.
+        if "missing dependencies" in msg.lower() or "libnss" in msg.lower() or "shared libraries" in msg.lower():
+            print("[Collector][Posts] Playwright: Chromium não conseguiu abrir — faltam bibliotecas do sistema operacional (comum no Linux, varia por distro). Rode 'sudo playwright install-deps chromium' (se tiver Python+Playwright instalados) ou instale manualmente libnss3/libatk1.0-0/libgbm1 e afins via seu gerenciador de pacotes. Caindo para busca guest por enquanto.")
+        else:
+            print(f"[Collector][Posts] Playwright erro: {e}")
     return jobs[:limit]
 
 def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]:

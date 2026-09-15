@@ -67,7 +67,7 @@ A CLI lê as mesmas configurações salvas pela GUI (`.env`, `curriculum_base.js
 
 ### 1. Requisitos (rodando do código-fonte)
 * Python 3.10+
-* Playwright (opcional, só necessário para automação de navegador)
+* Playwright (necessário para login real no LinkedIn — Posts de Recrutadores e Easy Apply). Instale com `pip install playwright && playwright install chromium`. No `.exe` empacotado (releases), o Chromium já vem embutido, sem precisar instalar nada — só preencher `LINKEDIN_EMAIL`/`LINKEDIN_PASSWORD` na aba 3.
 
 ### 2. Instalar dependências
 ```bash
@@ -211,3 +211,4 @@ job_auto_fit/
 * O parser heurístico (sem IA) foi calibrado para currículos em PT-BR/EN com seções bem definidas; modelos muito fora do padrão podem exigir revisão manual dos campos importados.
 * A coleta no LinkedIn está sujeita a bloqueios (HTTP 429/999); já existe um backoff automático, mas buscas muito frequentes ainda podem ser limitadas pela própria plataforma.
 * A automação de Easy Apply/Gupy via Playwright depende da estrutura atual dessas páginas — mudanças no site podem exigir ajuste nos seletores.
+* O Chromium bundlado no `.exe`/binário Linux abre com janela visível (`headless=False`) de propósito, pra você poder resolver captcha/2FA do LinkedIn manualmente quando aparecer. No Linux, o binário do Chromium é empacotado mas ainda depende de bibliotecas do sistema (libnss3, libatk1.0-0, libgbm1, etc.) que variam por distro — se o login via Playwright falhar só no Linux, rode `sudo playwright install-deps chromium` (com Python instalado) ou instale essas libs manualmente; a busca cai automaticamente para o modo "guest" (sem login, resultado mais limitado) nesse caso.

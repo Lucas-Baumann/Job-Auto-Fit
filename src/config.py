@@ -9,6 +9,13 @@ _project_root = Path(__file__).resolve().parent.parent
 # Detecta PyInstaller via sys._MEIPASS ou sys.frozen ou caminho com _MEI
 is_frozen = getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS') or "_MEI" in str(Path(__file__).resolve())
 if is_frozen:
+    # No .exe empacotado, o Chromium do Playwright vai bundlado dentro do próprio pacote
+    # (o build em CI instala com PLAYWRIGHT_BROWSERS_PATH=0, que grava o navegador em
+    # playwright/driver/package/.local-browsers em vez do cache global do usuário
+    # ~/.cache/ms-playwright — cache que não existe em quem só baixou o .exe). Setado aqui
+    # cedo, antes de qualquer uso do playwright, e só quando congelado: em modo dev o
+    # desenvolvedor continua usando o cache global normal do 'playwright install chromium'.
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
     # Pasta onde o .exe foi colocado pelo usuário (Desktop, Downloads, pendrive...) — usada
     # só para localizar dados de uma instalação anterior (migração abaixo). Os dados do
     # usuário NÃO ficam mais aqui: cada pasta onde alguém soltasse o .exe criava sua própria

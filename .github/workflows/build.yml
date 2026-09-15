@@ -38,6 +38,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Instala o Chromium do Playwright embutido no pacote (pra empacotar no .exe)
+        shell: bash
+        env:
+          # "0" faz o navegador ser gravado dentro de playwright/driver/package/.local-browsers
+          # em vez do cache global do usuário (~/.cache/ms-playwright) — assim o PyInstaller
+          # enxerga o navegador como dado normal do pacote 'playwright' (ver JobAutoFit.spec) e
+          # ele acaba dentro do .exe, funcionando em máquinas sem Python/Playwright instalado.
+          PLAYWRIGHT_BROWSERS_PATH: "0"
+        run: |
+          playwright install chromium --no-shell
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            playwright install-deps chromium
+          fi
+
       - name: Compila o executável
         run: pyinstaller JobAutoFit.spec --noconfirm
 
