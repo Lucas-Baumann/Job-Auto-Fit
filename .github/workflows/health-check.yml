@@ -1,0 +1,31 @@
+name: Health Check das Fontes de Vaga
+
+# Roda tests/test_sources_health.py periodicamente (requisição real contra cada site, sem
+# mock) pra pegar cedo quando algum site muda HTML/API e algum seletor do collector.py
+# desatualiza -- antes só se descobria isso manualmente, quando a busca real trazia poucos
+# resultados e alguém desconfiava e rodava o script à mão.
+#
+# Uma falha aqui deixa o job vermelho no GitHub Actions; o GitHub já manda e-mail sozinho pro
+# dono do repositório quando um workflow agendado falha, então isso já serve como aviso sem
+# precisar integrar Telegram/e-mail à parte.
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'  # toda segunda-feira, 12:00 UTC (09:00 no horário de Brasília)
+  workflow_dispatch:  # permite rodar manualmente pela aba Actions, sem esperar a semana
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instala só o necessário pra rodar o collector (sem playwright/pyinstaller — não usados aqui)
+        run: pip install requests beautifulsoup4
+
+      - name: Roda o health-check das fontes
+        run: python tests/test_sources_health.py
