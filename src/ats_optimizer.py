@@ -97,12 +97,15 @@ def call_llm(prompt: str) -> str:
     if provider == "groq" and Config.GROQ_API_KEY:
         return _call_openai_compat(prompt, Config.GROQ_API_KEY, "https://api.groq.com/openai/v1/chat/completions", "llama3-8b-8192")
     if provider == "openrouter" and Config.OPENROUTER_API_KEY:
-        # Modelos para tentar (ordem de preferência)
+        # Modelos para tentar (ordem de preferência). Modelos ":free" da OpenRouter mudam de
+        # disponibilidade sem aviso (ex: minimax-m3:free virou pago, mesmo problema que já
+        # tivemos com o Gemini) — troque estes fallbacks se algum começar a falhar sempre com
+        # 404 "unavailable for free" (confira a lista atual em openrouter.ai/models?max_price=0).
         models_to_try = []
         seen = set()
-        for m in [Config.OPENROUTER_MODEL, 
-                  "minimax/minimax-m3:free",
-                  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"]:
+        for m in [Config.OPENROUTER_MODEL,
+                  "z-ai/glm-5.2:free",
+                  "google/gemma-4-31b-it:free"]:
             if m and m not in seen:
                 seen.add(m)
                 models_to_try.append(m)
@@ -111,9 +114,16 @@ def call_llm(prompt: str) -> str:
             try:
                 r = call_openrouter_once(prompt, Config.OPENROUTER_API_KEY, model)
                 if r.status_code == 200:
-                    return r.json()["choices"][0]["message"]["content"]
+                    data = r.json()
+                    choices = data.get("choices")
+                    if choices:
+                        return choices[0]["message"]["content"]
+                    # HTTP 200 mas sem "choices" — a OpenRouter às vezes retorna erro (rate
+                    # limit, roteamento) dentro de um corpo 200; sem isto o erro real ficava
+                    # escondido atrás de um KeyError genérico "'choices'".
+                    print(f"[ATS AI] OpenRouter modelo '{model}': resposta 200 sem 'choices' — {r.text[:300]}")
+                    continue
                 else:
-                    err = f"HTTP {r.status_code}: {r.text[:500]}"
                     print(f"[ATS AI] OpenRouter modelo '{model}' falhou: {r.status_code} - {r.text[:300]}")
                     continue
             except Exception as e:
