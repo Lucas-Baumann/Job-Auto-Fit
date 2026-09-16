@@ -106,10 +106,8 @@ class Config:
 
     # Credenciais
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL", "")
-    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD", "")
-    GUPY_EMAIL = os.getenv("GUPY_EMAIL", "")
-    GUPY_PASSWORD = os.getenv("GUPY_PASSWORD", "")
+    # LinkedIn/Gupy não usam mais email+senha guardados aqui — o login é feito uma vez por
+    # navegador real (aba 'IA & Conexões') e só a sessão fica salva em disco, ver browser_auth.py
 
     # Preferências de Vaga (Padrão caso não sejam especificadas na execução)
     TARGET_KEYWORDS = ["Desenvolvedor Python", "Python Developer", "Engenheiro de Software", "Desenvolvedor Backend"]

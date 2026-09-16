@@ -67,7 +67,7 @@ A CLI lê as mesmas configurações salvas pela GUI (`.env`, `curriculum_base.js
 
 ### 1. Requisitos (rodando do código-fonte)
 * Python 3.10+
-* Playwright (necessário para login real no LinkedIn — Posts de Recrutadores e Easy Apply). Instale com `pip install playwright && playwright install chromium`. No `.exe` empacotado (releases), o Chromium já vem embutido, sem precisar instalar nada — só preencher `LINKEDIN_EMAIL`/`LINKEDIN_PASSWORD` na aba 3.
+* Playwright (necessário para login real no LinkedIn — Posts de Recrutadores e Easy Apply). Instale com `pip install playwright && playwright install chromium`. No `.exe` empacotado (releases), o Chromium já vem embutido, sem precisar instalar nada — clique em "Fazer login" na aba 3 (abre um navegador real; o app nunca vê nem guarda sua senha, só a sessão).
 
 ### 2. Instalar dependências
 ```bash
@@ -92,8 +92,8 @@ Preencha pela GUI (aba 3) ou editando o arquivo diretamente. Referência complet
 | `OLLAMA_HOST` / `OLLAMA_MODEL` | IA rodando localmente — grátis e sem enviar dados pra fora |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | Envio de candidaturas por e-mail — **ver nota abaixo** |
 | `GITHUB_TOKEN` | Token *classic* do GitHub, escopo `repo` — necessário só para a aba **Perfil GitHub** publicar direto |
-| `LINKEDIN_EMAIL` / `LINKEDIN_PASSWORD` | Login usado pela automação Playwright (Easy Apply / posts) |
-| `GUPY_EMAIL` / `GUPY_PASSWORD` | Login usado no preenchimento automático na Gupy |
+
+> **Login no LinkedIn/Gupy:** não é feito por variável no `.env` — clique em "Fazer login" na aba 3 (**IA & Conexões**). Isso abre um navegador real na página de login do site; você loga do jeito que quiser (senha, "Continuar com Google", 2FA) e o app nunca vê nem guarda sua senha — só salva a sessão localmente (`%LOCALAPPDATA%\JobAutoFit\linkedin_session.json` / `gupy_session.json`). Se a sessão expirar, o app avisa (notificação desktop) e é só clicar em "Fazer login" de novo.
 
 > **SMTP com Gmail:** `SMTP_PASS` não é sua senha normal — o Google bloqueia login direto de app assim. Gere uma **Senha de App** em `myaccount.google.com` → Segurança → Verificação em duas etapas → Senhas de app, e use essa senha de 16 caracteres aqui. Sem isso configurado, o app ainda funciona normalmente (só o envio por e-mail fica desativado).
 >

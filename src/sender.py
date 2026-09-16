@@ -49,23 +49,37 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
     """
     Automatiza o preenchimento inicial na plataforma Gupy via Playwright.
     Preenche dados padrão e anexa o PDF otimizado.
+
+    Usa a sessão salva do login por navegador (aba 'IA & Conexões', ver browser_auth.py)
+    quando disponível — sem isso, o candidato tinha que logar manualmente dentro dessa
+    mesma janela toda vez que uma candidatura rodava.
     """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("[Sender Gupy] Playwright não está instalado. Execute 'pip install playwright && playwright install'")
         return False
+    import browser_auth
 
     # modo seguro: delay randômico + aviso anti-ban
     delay = random.uniform(2.5, 5.5)
     print(f"[Sender Gupy] Iniciando automacao do navegador para a vaga: {job_url} (delay seguro {delay:.1f}s)")
     print("[Aviso] Modo seguro ativo: ritmo humano, delays randômicos para evitar softban 999/429 (15min-24h). Mantenha limite diário ≤20.")
+    if not browser_auth.has_session("gupy"):
+        print("[Sender Gupy] Sem sessão salva — faça login na aba 'IA & Conexões' pra candidatura preencher automaticamente já logado. Continuando sem login (pode pedir login manual na janela).")
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(400,700)))
-            context = browser.new_context()
+            context = browser_auth.new_context(browser, "gupy")
             page = context.new_page()
             page.goto(job_url, timeout=30000)
+            if browser_auth.has_session("gupy") and browser_auth.session_expired("gupy", page.url):
+                print("[Sender Gupy] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
+                try:
+                    from notify import notify_all
+                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão da Gupy expirou. Faça login novamente na aba 'IA & Conexões'.")
+                except Exception:
+                    pass
             time.sleep(random.uniform(2.0, 4.0))
             apply_btn = page.query_selector("button:has-text('Candidatar-se'), a:has-text('Candidatar-se')")
             if apply_btn:
@@ -92,12 +106,14 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
 def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
     """
     Automacao com ritmo humano para vagas LinkedIn Easy Apply via Playwright.
+    Usa a sessão salva do login por navegador (aba 'IA & Conexões') quando disponível.
     """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("[Sender LinkedIn] Playwright não instalado.")
         return False
+    import browser_auth
 
     delay = random.uniform(3.0, 6.0)
     print(f"[Sender LinkedIn] Acessando vaga no LinkedIn: {job_url} (delay seguro {delay:.1f}s)")
@@ -105,9 +121,16 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(600,900)))
-            context = browser.new_context()
+            context = browser_auth.new_context(browser, "linkedin")
             page = context.new_page()
             page.goto(job_url, timeout=30000)
+            if browser_auth.has_session("linkedin") and browser_auth.session_expired("linkedin", page.url):
+                print("[Sender LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
+                try:
+                    from notify import notify_all
+                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
+                except Exception:
+                    pass
             time.sleep(random.uniform(2.0,4.5))
             easy_apply_btn = page.query_selector("button.jobs-apply-button")
             if easy_apply_btn:

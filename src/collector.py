@@ -1,6 +1,5 @@
 import re
 import time
-import os
 import json
 import unicodedata
 import requests
@@ -538,7 +537,7 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
         # (checagem antiga aqui nunca disparava por erro de precedência de operador: "or ... if
         # ... else" sem parênteses avalia diferente do que parece.)
         if "/uas/login" in resp.url or "/authwall" in resp.url or "/checkpoint/" in resp.url:
-            print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Configure LINKEDIN_EMAIL/LINKEDIN_PASSWORD + Playwright instalado para usar login real.")
+            print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Faça login pela aba 'IA & Conexões' (abre navegador real, sem precisar digitar senha no app) para usar login real.")
             return jobs
 
         soup = BeautifulSoup(resp.text, 'html.parser')
@@ -624,28 +623,22 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
     return jobs[:limit]
 
 def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List[Dict]:
-    """Scraping via Playwright com login (se credenciais disponíveis)."""
+    """Scraping via Playwright usando uma sessão salva (login feito uma vez, via navegador
+    real, na aba 'IA & Conexões' — ver browser_auth.py). Não usa email/senha: o app nunca
+    lida com a senha do LinkedIn, só reaproveita a sessão (cookies) que o próprio Playwright
+    salvou depois do login manual."""
     jobs: List[Dict] = []
-    linkedin_email = os.getenv("LINKEDIN_EMAIL", "")
-    linkedin_pass = os.getenv("LINKEDIN_PASSWORD", "")
-    # também verifica .env via config se disponível
-    if not linkedin_email:
-        try:
-            from config import Config
-            linkedin_email = Config.LINKEDIN_EMAIL
-            linkedin_pass = Config.LINKEDIN_PASSWORD
-        except: pass
-
-    if not linkedin_email or not linkedin_pass:
-        return jobs  # sem credenciais -> nem tenta, cai pro guest (comportamento normal)
+    import browser_auth
+    if not browser_auth.has_session("linkedin"):
+        return jobs  # sem sessão salva -> nem tenta, cai pro guest (comportamento normal)
 
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        # credenciais configuradas mas Playwright não instalado (ex: .exe empacotado não
-        # inclui o Playwright + Chromium — pesado demais pra empacotar). Sem este aviso, o
-        # usuário via só "Guest encontrou 0 posts" sem entender por que o login não ajudou.
-        print("[Collector][Posts] LINKEDIN_EMAIL/PASSWORD configurados, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login). Rode a partir do código-fonte com 'pip install playwright && playwright install chromium' para usar login real.")
+        # sessão salva mas Playwright não instalado (ex: .exe empacotado não inclui o
+        # Playwright + Chromium — pesado demais pra empacotar). Sem este aviso, o usuário via
+        # só "Guest encontrou 0 posts" sem entender por que o login não ajudou.
+        print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
         return jobs
 
     expanded = f"{keywords} vaga contratando"
@@ -653,20 +646,19 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
-            ctx = browser.new_context(user_agent=_headers()['User-Agent'], locale="pt-BR")
+            ctx = browser_auth.new_context(browser, "linkedin")
             page = ctx.new_page()
-            print("[Collector][Posts] Playwright: fazendo login no LinkedIn...")
-            page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=30000)
-            page.fill('input[name="session_key"]', linkedin_email)
-            page.fill('input[name="session_password"]', linkedin_pass)
-            page.click('button[type="submit"]')
-            page.wait_for_timeout(4000)
-            # se ainda em login (captcha/2FA), dá tempo para usuário resolver
-            if "checkpoint" in page.url or "challenge" in page.url:
-                print("[Collector][Posts] Checkpoint/CAPTCHA detectado — aguarde 30s para resolver manualmente...")
-                page.wait_for_timeout(30000)
             page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2000)
+            if browser_auth.session_expired("linkedin", page.url):
+                print("[Collector][Posts] Sessão do LinkedIn expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest por enquanto.")
+                try:
+                    from notify import notify_all
+                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões' para continuar coletando posts de recrutadores.")
+                except Exception:
+                    pass
+                browser.close()
+                return jobs
             # scroll para carregar posts
             for _ in range(3):
                 page.mouse.wheel(0, 2000)
@@ -721,13 +713,13 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
 def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]:
     """
     Coleta vagas divulgadas em posts de recrutadores no LinkedIn.
-    - Tenta Playwright autenticado se LINKEDIN_EMAIL/PASSWORD disponíveis
+    - Tenta Playwright com sessão salva (login via navegador na aba 'IA & Conexões')
     - Senão cai para scraping guest (mais frágil, mas gratuito)
     - Filtra por sinais de recrutador + keywords de contratação
     - Expande keywords automaticamente: 'python developer' -> 'python developer vaga contratando hiring'
     """
     print(f"[Collector][Posts] Buscando posts de recrutadores para '{keywords}'...")
-    # 1. tenta Playwright se tiver credenciais
+    # 1. tenta Playwright se tiver sessão salva
     jobs = _fetch_linkedin_posts_via_playwright(keywords, limit=limit)
     if jobs:
         print(f"[Collector][Posts] Playwright encontrou {len(jobs)} posts")

@@ -7,7 +7,7 @@ from PyInstaller.utils.hooks import collect_all
 # dados de quem compilou. O código já lida bem com a ausência do arquivo (fica em branco).
 datas = [('.env.example', '.'), ('logo.ico', '.')]
 binaries = []
-hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth',
+hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth','browser_auth',
                  # plyer resolve o backend de notificação por import dinâmico em runtime
                  # (plyer/utils.py monta a string 'plyer.platforms.<os>.<recurso>' e faz
                  # __import__) — o analisador estático do PyInstaller não enxerga isso, então

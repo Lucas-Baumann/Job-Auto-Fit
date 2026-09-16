@@ -70,12 +70,56 @@ class IATabMixin:
         tb.Label(g,text="Senha / App Pass").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g,textvariable=self.var_smtp_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
         tb.Label(card2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=("Segoe UI",8),bootstyle="light").pack(anchor=W, pady=(4,0))
         card3=tb.Labelframe(f,text="LinkedIn / Gupy (automação navegador, opcional)",padding=10,bootstyle="warning"); card3.pack(fill=X,pady=5)
-        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Playwright preenche formulários com ritmo humano; CAPTCHA/teste pausa para você",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT); info_icon(hdr3, "Automação de navegador real (Playwright).\nLinkedIn Easy Apply e Gupy: abre Chromium visível, clica em Candidatar-se e anexa PDF.\nPrecisa login. Deixe vazio para modo manual (só relatório).").pack(side=LEFT,padx=4)
-        g2=tb.Frame(card3); g2.pack(fill=X); g2.columnconfigure(1,weight=1); g2.columnconfigure(3,weight=1)
-        tb.Label(g2,text="LinkedIn Email").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_email).grid(row=0,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Senha").grid(row=0,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_linkedin_pass,show="*").grid(row=0,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Gupy Email").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(g2,text="Senha").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(g2,textvariable=self.var_gupy_pass,show="*").grid(row=1,column=3,sticky=EW,padx=5,pady=3)
+        hdr3=tb.Frame(card3); hdr3.pack(fill=X); tb.Label(hdr3,text="Login feito num navegador real — o app nunca vê nem guarda sua senha, só a sessão",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT); info_icon(hdr3, "Clique em 'Fazer login' — abre um Chromium de verdade na página de login do site.\nLogue do jeito que quiser (senha, Google, 2FA); o app não vê nada disso.\nDepois de detectar o login, salva só a sessão (cookies) localmente — nunca a senha.\nSe a sessão expirar depois, o app avisa e é só logar de novo pelo mesmo botão.").pack(side=LEFT,padx=4)
+        g2=tb.Frame(card3); g2.pack(fill=X,pady=(4,0))
+        tb.Label(g2,text="LinkedIn:").grid(row=0,column=0,sticky=W,padx=5,pady=4)
+        self.lbl_linkedin_auth=tb.Label(g2,text="…",width=16); self.lbl_linkedin_auth.grid(row=0,column=1,sticky=W,padx=5)
+        self.btn_linkedin_login=tb.Button(g2,text="🔗 Fazer login",bootstyle="warning-outline",command=lambda:self._start_browser_login("linkedin")); self.btn_linkedin_login.grid(row=0,column=2,padx=5)
+        tb.Button(g2,text="🗑 Esquecer",bootstyle="secondary-outline",command=lambda:self._forget_browser_session("linkedin")).grid(row=0,column=3,padx=5)
+        tb.Label(g2,text="Gupy:").grid(row=1,column=0,sticky=W,padx=5,pady=4)
+        self.lbl_gupy_auth=tb.Label(g2,text="…",width=16); self.lbl_gupy_auth.grid(row=1,column=1,sticky=W,padx=5)
+        self.btn_gupy_login=tb.Button(g2,text="🔗 Fazer login",bootstyle="warning-outline",command=lambda:self._start_browser_login("gupy")); self.btn_gupy_login.grid(row=1,column=2,padx=5)
+        tb.Button(g2,text="🗑 Esquecer",bootstyle="secondary-outline",command=lambda:self._forget_browser_session("gupy")).grid(row=1,column=3,padx=5)
+        self.after(200, self._refresh_browser_auth_status)
+
+    def _refresh_browser_auth_status(self):
+        try:
+            import browser_auth
+            for service, lbl in (("linkedin", getattr(self,"lbl_linkedin_auth",None)), ("gupy", getattr(self,"lbl_gupy_auth",None))):
+                if lbl is None: continue
+                if browser_auth.has_session(service):
+                    lbl.config(text="✓ Logado", bootstyle="success")
+                else:
+                    lbl.config(text="○ Não logado", bootstyle="light")
+        except Exception:
+            pass
+
+    def _start_browser_login(self, service: str):
+        label = {"linkedin":"LinkedIn","gupy":"Gupy"}.get(service, service)
+        btn = getattr(self, f"btn_{service}_login", None)
+        if btn: btn.config(state=DISABLED, text="Aguardando login…")
+        lbl = getattr(self, f"lbl_{service}_auth", None)
+        if lbl: lbl.config(text="⏳ aguardando…", bootstyle="warning")
+        def worker():
+            import browser_auth
+            ok = browser_auth.login_via_browser(service)
+            def done():
+                if btn: btn.config(state=NORMAL, text="🔗 Fazer login")
+                self._refresh_browser_auth_status()
+                if ok:
+                    messagebox.showinfo("Login", f"Login no {label} salvo com sucesso.")
+                else:
+                    messagebox.showwarning("Login", f"Login no {label} não foi concluído (janela fechada ou tempo esgotado). Tente novamente.")
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _forget_browser_session(self, service: str):
+        label = {"linkedin":"LinkedIn","gupy":"Gupy"}.get(service, service)
+        if not messagebox.askyesno("Esquecer login", f"Isso apaga a sessão salva do {label}. Você vai precisar logar de novo pra usar automação com login. Continuar?"):
+            return
+        import browser_auth
+        browser_auth.clear_session(service)
+        self._refresh_browser_auth_status()
 
     def _update_ai_state(self, *_):
         p = self.var_llm_provider.get()
