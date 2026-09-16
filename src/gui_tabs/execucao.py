@@ -58,12 +58,14 @@ class ExecucaoTabMixin:
         self.proc=None; self.stop_requested=False
         # No .exe congelado não existe python/main.py separado para chamar via subprocess (o .exe
         # empacota só a GUI) — nesse caso roda o pipeline no mesmo processo em vez de subprocess.
+        # Parar nesse modo não termina um processo externo (não existe um): run_pipeline recebe
+        # should_stop e checa a flag entre keywords/vagas, então "Parar" ainda funciona, só não é
+        # instantâneo — a vaga/keyword em andamento termina antes de interromper.
         frozen=bool(getattr(sys,'frozen',False))
-        self.btn_stop.config(state=DISABLED if frozen else NORMAL)
+        self.btn_stop.config(state=NORMAL)
         def target():
             try:
                 if frozen:
-                    self._log("[.exe] Rodando automação no mesmo processo (botão Parar não disponível neste modo).")
                     from main import run_pipeline
                     import contextlib
                     class _LogStream:
@@ -75,8 +77,8 @@ class ExecucaoTabMixin:
                                 self.log_fn(line)
                         def flush(self): pass
                     with contextlib.redirect_stdout(_LogStream(self._log)):
-                        run_pipeline(kws, loc, min_score, dry_run=dry_run)
-                    self._log("\n=== Finalizado ===")
+                        run_pipeline(kws, loc, min_score, dry_run=dry_run, should_stop=lambda: self.stop_requested)
+                    self._log("\n=== Finalizado ===" if not self.stop_requested else "\n=== Parado ===")
                 else:
                     cmd=[sys.executable,str(BASE_DIR/"main.py"),"--keywords",*kws,"--location",loc,"--min-score",str(min_score)]
                     if dry_run: cmd.append("--dry-run")
@@ -95,8 +97,9 @@ class ExecucaoTabMixin:
         threading.Thread(target=target,daemon=True).start()
     def stop_automation(self):
         self.stop_requested=True
+        self.btn_stop.config(state=DISABLED)
         try: self.proc.terminate()
         except: pass
-        self._log("[Stop] solicitado")
+        self._log("[Stop] Parada solicitada — aguardando terminar a keyword/vaga em andamento (não é instantâneo).")
 
     # Dashboard

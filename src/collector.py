@@ -802,14 +802,20 @@ def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         print(f"[Collector][GeekHunter] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real (site é focado em vagas de tecnologia).")
     return jobs
 
-def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_per_source: int = 10, enable_linkedin_posts: bool = True, linkedin_posts_limit: int = None) -> List[Dict]:
-    """Orquestra a coleta em múltiplas fontes gratuitas."""
+def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_per_source: int = 10, enable_linkedin_posts: bool = True, linkedin_posts_limit: int = None, should_stop=None) -> List[Dict]:
+    """Orquestra a coleta em múltiplas fontes gratuitas.
+
+    should_stop: callable opcional, sem argumentos, retornando bool — checado antes de cada
+    keyword, pra permitir interromper a coleta cedo (ver main.run_pipeline)."""
     all_jobs = []
     _reset_backoff()
     if linkedin_posts_limit is None:
         linkedin_posts_limit = limit_per_source
-    
+
     for kw in keywords_list:
+        if should_stop and should_stop():
+            print("[Collector] Parada solicitada pelo usuário — interrompendo coleta antes da próxima keyword.")
+            break
         print(f"[Collector] Buscando vagas para '{kw}'...")
 
         # Gupy/Remotive/InfoJobs/Catho/Programathor são fontes independentes, sem o

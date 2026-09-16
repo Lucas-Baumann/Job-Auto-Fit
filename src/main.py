@@ -14,13 +14,22 @@ from notify import notify_all
 from logutil import log_print
 
 
-def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_posts=None):
+def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_posts=None, should_stop=None):
     """Executa um ciclo completo: coleta -> filtros -> ATS -> envio -> relatório.
 
     Extraído de main() para poder ser chamado tanto pela CLI (python main.py) quanto
     diretamente pela GUI quando ela roda como .exe congelado — nesse caso não existe um
     python.exe nem um main.py separado para chamar via subprocess (o .exe empacota só a GUI).
-    """
+
+    should_stop: callable opcional, sem argumentos, retornando bool — checado entre
+    keywords (na coleta) e entre vagas (no processamento ATS/envio) pra permitir parar a
+    automação no modo .exe congelado, onde ela roda na mesma thread da GUI em vez de um
+    subprocess que dá pra simplesmente terminar (esse é o caminho usado em modo dev)."""
+    def _stop_requested() -> bool:
+        try:
+            return bool(should_stop and should_stop())
+        except Exception:
+            return False
     log_print("=" * 65)
     log_print("[+] INICIANDO AUTOMATIZADOR DE CURRICULOS & VAGAS (JobAutoFit)")
     log_print("=" * 65)
@@ -57,7 +66,7 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     if not auto_send:
         log_print("[*] Envio automático: DESATIVADO — vagas aprovadas ficam em 'ready_to_send' aguardando aprovação manual na aba Histórico.")
 
-    raw_jobs = collect_all_jobs(keywords, location=location, limit_per_source=filter_cfg.get("limit_per_source", 8), enable_linkedin_posts=enable_posts, linkedin_posts_limit=linkedin_posts_limit)
+    raw_jobs = collect_all_jobs(keywords, location=location, limit_per_source=filter_cfg.get("limit_per_source", 8), enable_linkedin_posts=enable_posts, linkedin_posts_limit=linkedin_posts_limit, should_stop=should_stop)
 
     # aplicar filtros avançados antes de salvar
     if filter_cfg:
@@ -91,6 +100,9 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     new_jobs_count = 0
 
     for j in raw_jobs:
+        if _stop_requested():
+            log_print("[Main] Parada solicitada pelo usuário — interrompendo salvamento das vagas coletadas.")
+            break
         if len(saved_jobs) >= remaining and daily_limit > 0:
             log_print(f"[Limite] Interrompendo após {remaining} vagas (limite diário).")
             break
@@ -107,6 +119,9 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
 
     # 3. Processar Cada Vaga (ATS + Envio)
     for idx, job in enumerate(saved_jobs, 1):
+        if _stop_requested():
+            log_print(f"\n[Main] Parada solicitada pelo usuário — interrompendo antes de processar {len(saved_jobs) - idx + 1} vaga(s) restante(s).")
+            break
         log_print(f"\n--- [{idx}/{len(saved_jobs)}] Processando: {job['title']} @ {job['company']} ({job['platform']}) ---")
 
         try:
