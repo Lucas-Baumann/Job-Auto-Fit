@@ -1,4 +1,4 @@
-import json, os, sys, threading, subprocess, webbrowser, re
+import json, os, sys, threading, subprocess, webbrowser, re, queue
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -26,14 +26,32 @@ class ExecucaoTabMixin:
         self.log_text=tk.Text(log_frame,height=18,wrap="word",bg="#0f0f0f",fg="#d0d0d0",insertbackground="white",font=("Consolas",9)); self.log_text.pack(side=LEFT,fill=BOTH,expand=True)
         sb=tb.Scrollbar(log_frame,orient=VERTICAL,command=self.log_text.yview); sb.pack(side=RIGHT,fill=Y); self.log_text.configure(yscrollcommand=sb.set)
         self.log=type("o",(),{"text":self.log_text})()
+        # Tkinter não é thread-safe: mexer no Text direto de uma thread em background (o
+        # pipeline roda numa) já causou o app travar (ex: ao clicar 'Abrir último HTML' logo
+        # depois de uma execução, enquanto a thread do pipeline ainda tocava no widget). _log
+        # agora só enfileira; quem realmente escreve no widget é _drain_log_queue, sempre
+        # disparado via self.after() no thread principal.
+        self._log_queue=queue.Queue()
         self._log("Pronto. Clique em Iniciar.\n")
+        self.after(80, self._drain_log_queue)
         row=tb.Frame(f); row.pack(fill=X,pady=5)
         tb.Button(row,text="Abrir último HTML",bootstyle="info",command=self.open_last_report).pack(side=LEFT,padx=5)
         tb.Button(row,text="Pasta OUTPUT",bootstyle="secondary",command=lambda:self._open_folder(BASE_DIR/"output")).pack(side=LEFT,padx=5)
         self.btn_preview_ai=tb.Button(row,text="Preview ATS c/ IA (reestrutura)",bootstyle="warning-outline",command=self.preview_pdf); self.btn_preview_ai.pack(side=LEFT,padx=5)
         tb.Button(row,text="Limpar log",bootstyle="secondary-outline",command=lambda:self.log.text.delete("1.0",tk.END)).pack(side=RIGHT)
         self.lbl_exec_ai=tb.Label(f,text="",font=("Segoe UI",8)); self.lbl_exec_ai.pack(anchor=W, pady=(2,0))
-    def _log(self,msg): self.log.text.insert(tk.END,msg+("\n" if not msg.endswith("\n") else "")); self.log.text.see(tk.END); self.update_idletasks()
+    def _log(self,msg):
+        """Thread-safe: pode ser chamado tanto do thread principal quanto da thread do
+        pipeline em background — só enfileira, nunca toca o widget diretamente."""
+        self._log_queue.put(msg)
+    def _drain_log_queue(self):
+        updated=False
+        while True:
+            try: msg=self._log_queue.get_nowait()
+            except queue.Empty: break
+            self.log.text.insert(tk.END,msg+("\n" if not msg.endswith("\n") else "")); updated=True
+        if updated: self.log.text.see(tk.END)
+        self.after(80, self._drain_log_queue)
     def _open_folder(self,p):
         try:
             if sys.platform.startswith("win"): os.startfile(str(p))
@@ -93,7 +111,13 @@ class ExecucaoTabMixin:
                     self.proc.wait()
                     self._log("\n=== Finalizado ===" if not self.stop_requested else "\n=== Parado ===")
             except Exception as e: self._log(f"[Erro] {e}")
-            finally: self.progress.stop(); self.btn_run.config(state=NORMAL); self.btn_stop.config(state=DISABLED); self._refresh_hist(); self._refresh_dashboard()
+            finally:
+                # mesma razão do _log: essas chamadas mexem em widgets Tk e o botão/progress
+                # são widgets também — precisam rodar no thread principal, não aqui.
+                def _finish():
+                    self.progress.stop(); self.btn_run.config(state=NORMAL); self.btn_stop.config(state=DISABLED)
+                    self._refresh_hist(); self._refresh_dashboard()
+                self.after(0, _finish)
         threading.Thread(target=target,daemon=True).start()
     def stop_automation(self):
         self.stop_requested=True
