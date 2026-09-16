@@ -18,33 +18,9 @@ class HistoricoTabMixin:
     def _build_hist(self):
         f=self.tab_hist
         top=tb.Frame(f); top.pack(fill=X,pady=5)
-        tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga, clique no cabeçalho da coluna ordena").pack(side=LEFT,padx=5)
+        tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)").pack(side=LEFT,padx=5)
         tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_hist).pack(side=RIGHT,padx=5)
         tb.Button(top,text="🗑 Limpar Histórico",bootstyle="danger-outline",command=self.clear_history).pack(side=RIGHT,padx=5)
-
-        filt=tb.Frame(f); filt.pack(fill=X,pady=(0,5))
-        tb.Label(filt,text="Local:").pack(side=LEFT,padx=(5,2))
-        self.var_hist_filter_local=tk.StringVar(value="")
-        e_local=tb.Entry(filt,textvariable=self.var_hist_filter_local,width=16)
-        e_local.pack(side=LEFT,padx=(0,10)); e_local.bind("<KeyRelease>",lambda ev:self._refresh_hist())
-
-        tb.Label(filt,text="Status:").pack(side=LEFT,padx=(0,2))
-        self.var_hist_filter_status=tk.StringVar(value="Todos")
-        status_vals=["Todos","pending","ats_done","ready_to_send","applied","prepared","skipped","failed"]
-        cb_status=tb.Combobox(filt,textvariable=self.var_hist_filter_status,values=status_vals,state="readonly",width=13)
-        cb_status.pack(side=LEFT,padx=(0,10)); cb_status.bind("<<ComboboxSelected>>",lambda ev:self._refresh_hist())
-
-        tb.Label(filt,text="Outcome:").pack(side=LEFT,padx=(0,2))
-        self.var_hist_filter_outcome=tk.StringVar(value="Todos")
-        cb_outcome=tb.Combobox(filt,textvariable=self.var_hist_filter_outcome,values=["Todos"]+OUTCOME_OPTIONS,state="readonly",width=13)
-        cb_outcome.pack(side=LEFT,padx=(0,10)); cb_outcome.bind("<<ComboboxSelected>>",lambda ev:self._refresh_hist())
-
-        tb.Label(filt,text="Match mín. %:").pack(side=LEFT,padx=(0,2))
-        self.var_hist_filter_match_min=tk.StringVar(value="0")
-        sp_match=tb.Spinbox(filt,from_=0,to=100,increment=5,textvariable=self.var_hist_filter_match_min,width=5)
-        sp_match.pack(side=LEFT,padx=(0,10)); sp_match.bind("<KeyRelease>",lambda ev:self._refresh_hist()); sp_match.bind("<<Increment>>",lambda ev:self._refresh_hist()); sp_match.bind("<<Decrement>>",lambda ev:self._refresh_hist())
-
-        tb.Button(filt,text="Limpar filtros",bootstyle="secondary-outline",command=self._clear_hist_filters).pack(side=LEFT,padx=5)
 
         actions=tb.Frame(f); actions.pack(fill=X,pady=(0,5))
         tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected).pack(side=LEFT,padx=5)
@@ -53,25 +29,33 @@ class HistoricoTabMixin:
         info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side=LEFT)
 
         cols=("vaga","empresa","local","match","status","outcome","plataforma")
+        self._hist_col_labels={"vaga":"Vaga","empresa":"Empresa","local":"Local","match":"Match","status":"Status","outcome":"Outcome","plataforma":"Plataforma"}
         # coluna exibida -> coluna real do SQL, pra ordenação por clique no cabeçalho
         self._hist_col_to_sql={"vaga":"title","empresa":"company","local":"location","match":"match_score","status":"status","outcome":"outcome","plataforma":"platform"}
-        self._hist_sort_col="id"; self._hist_sort_reverse=True
+        # nenhuma coluna ordenada por padrão -> ordem natural (mais recente primeiro, por id)
+        self._hist_sort_col=None; self._hist_sort_dir=None
         self.tree=tb.Treeview(f,columns=cols,show="headings",bootstyle="dark",height=14)
-        for c in cols: self.tree.heading(c,text=c.capitalize(),command=lambda c=c:self._sort_hist_by(c))
+        for c in cols: self.tree.heading(c,command=lambda c=c:self._sort_hist_by(c))
         self.tree.column("vaga",width=240); self.tree.column("empresa",width=150); self.tree.column("local",width=120); self.tree.column("match",width=55,anchor=CENTER); self.tree.column("status",width=95,anchor=CENTER); self.tree.column("outcome",width=100,anchor=CENTER); self.tree.column("plataforma",width=85,anchor=CENTER)
+        self._update_hist_headers()
         self.tree.pack(fill=BOTH,expand=True,pady=5); self.tree.bind("<Double-Button-1>",self._on_hist_dbl); self._refresh_hist()
-    def _clear_hist_filters(self):
-        self.var_hist_filter_local.set("")
-        self.var_hist_filter_status.set("Todos")
-        self.var_hist_filter_outcome.set("Todos")
-        self.var_hist_filter_match_min.set("0")
-        self._refresh_hist()
+    def _update_hist_headers(self):
+        for c in self.tree["columns"]:
+            label=self._hist_col_labels.get(c,c.capitalize())
+            if c==self._hist_sort_col:
+                label += " ▲" if self._hist_sort_dir=="asc" else " ▼"
+            self.tree.heading(c,text=label)
     def _sort_hist_by(self,col):
-        sql_col=self._hist_col_to_sql.get(col,"id")
-        if self._hist_sort_col==sql_col:
-            self._hist_sort_reverse=not self._hist_sort_reverse
+        # ciclo de 3 estados por coluna, tipo planilha: crescente -> decrescente -> sem
+        # ordenação (volta pra ordem natural por id). Clicar em outra coluna reinicia o
+        # ciclo nela (crescente) e some com a setinha da coluna anterior.
+        if self._hist_sort_col != col:
+            self._hist_sort_col=col; self._hist_sort_dir="asc"
+        elif self._hist_sort_dir=="asc":
+            self._hist_sort_dir="desc"
         else:
-            self._hist_sort_col=sql_col; self._hist_sort_reverse=False
+            self._hist_sort_col=None; self._hist_sort_dir=None
+        self._update_hist_headers()
         self._refresh_hist()
     def _refresh_hist(self):
         try:
@@ -79,31 +63,14 @@ class HistoricoTabMixin:
             if not DB_PATH.exists(): return
             import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
 
-            where=[]; params=[]
-            local=self.var_hist_filter_local.get().strip()
-            if local:
-                where.append("location LIKE ?"); params.append(f"%{local}%")
-            status=self.var_hist_filter_status.get()
-            if status and status!="Todos":
-                where.append("status = ?"); params.append(status)
-            outcome=self.var_hist_filter_outcome.get()
-            if outcome and outcome!="Todos":
-                where.append("outcome = ?"); params.append(outcome)
-            try:
-                match_min=int(self.var_hist_filter_match_min.get() or 0)
-            except ValueError:
-                match_min=0
-            if match_min>0:
-                where.append("match_score >= ?"); params.append(match_min)
-            where_sql=(" WHERE "+" AND ".join(where)) if where else ""
+            if self._hist_sort_col:
+                sql_col=self._hist_col_to_sql.get(self._hist_sort_col,"id")
+                direction="ASC" if self._hist_sort_dir=="asc" else "DESC"
+                order_sql=f"{sql_col} {direction}, id DESC"  # desempate estável (ex: mesmo match_score)
+            else:
+                order_sql="id DESC"
 
-            sort_col=getattr(self,"_hist_sort_col","id")
-            direction="DESC" if getattr(self,"_hist_sort_reverse",True) else "ASC"
-            order_sql=f"{sort_col} {direction}"
-            if sort_col!="id":
-                order_sql+=", id DESC"  # desempate estável quando muitas vagas têm o mesmo valor (ex: match_score igual)
-
-            cur.execute(f"SELECT id,title,company,location,match_score,status,outcome,platform FROM jobs{where_sql} ORDER BY {order_sql} LIMIT 300", params)
+            cur.execute(f"SELECT id,title,company,location,match_score,status,outcome,platform FROM jobs ORDER BY {order_sql} LIMIT 300")
             for r in cur.fetchall():
                 self.tree.insert("",tk.END,iid=str(r["id"]),values=(r["title"],r["company"],r["location"],f"{r['match_score'] or 0}%",r["status"],r["outcome"] or "-",r["platform"]))
             con.close()
