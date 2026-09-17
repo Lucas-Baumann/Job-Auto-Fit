@@ -13,9 +13,82 @@ o app detecta e avisa (ver `session_expired`), sem travar a automação.
 Mecanismo validado empiricamente antes de implementar: salvar storage_state de um
 contexto e carregar num contexto novo preserva os cookies sem precisar logar de
 novo (testado com o próprio Playwright/Chromium bundlado no projeto).
+
+A sessão salva em disco (o cookie de login) é criptografada com o DPAPI do Windows
+(CryptProtectData/CryptUnprotectData) — a chave fica amarrada à conta do Windows que
+logou; nem copiando o arquivo pra outra máquina ou outro usuário dá pra decifrar sem
+saber a senha do Windows de quem gerou. Testado empiricamente (ida e volta) antes de
+integrar. Fora do Windows (build Linux), não existe um equivalente sem adicionar uma
+dependência de keyring do sistema que nem sempre está disponível (ex: sem daemon
+gráfico/D-Bus) — a sessão fica sem criptografia nesse caso, sem regressão (nunca teve
+proteção antes disso existir).
 """
+import json
+import sys
 from pathlib import Path
 from config import BASE_DIR
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def _dpapi_protect(data: bytes) -> bytes:
+    import ctypes
+    from ctypes import wintypes
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    crypt32.CryptProtectData.argtypes = [ctypes.POINTER(DATA_BLOB), wintypes.LPCWSTR, ctypes.POINTER(DATA_BLOB), ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(DATA_BLOB)]
+    crypt32.CryptProtectData.restype = wintypes.BOOL
+
+    buf = ctypes.create_string_buffer(data, len(data))
+    blob_in = DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    blob_out = DATA_BLOB()
+    if not crypt32.CryptProtectData(ctypes.byref(blob_in), "JobAutoFit session", None, None, None, 0, ctypes.byref(blob_out)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+
+
+def _dpapi_unprotect(data: bytes) -> bytes:
+    import ctypes
+    from ctypes import wintypes
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    crypt32.CryptUnprotectData.argtypes = [ctypes.POINTER(DATA_BLOB), ctypes.POINTER(wintypes.LPWSTR), ctypes.POINTER(DATA_BLOB), ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(DATA_BLOB)]
+    crypt32.CryptUnprotectData.restype = wintypes.BOOL
+
+    buf = ctypes.create_string_buffer(data, len(data))
+    blob_in = DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    blob_out = DATA_BLOB()
+    if not crypt32.CryptUnprotectData(ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+
+
+def _encrypt_bytes(data: bytes) -> bytes:
+    if not _is_windows():
+        return data
+    return _dpapi_protect(data)
+
+
+def _decrypt_bytes(data: bytes) -> bytes:
+    if not _is_windows():
+        return data
+    return _dpapi_unprotect(data)
 
 LOGIN_URLS = {
     "linkedin": "https://www.linkedin.com/login",
@@ -94,8 +167,11 @@ def login_via_browser(service: str, timeout_seconds: int = 300) -> bool:
                 page.wait_for_timeout(step)
                 elapsed += step
             if success:
-                ctx.storage_state(path=str(session_path(service)))
-                print(f"[BrowserAuth] Login em {SERVICE_LABELS.get(service, service)} detectado e sessão salva com sucesso.")
+                state = ctx.storage_state()
+                raw = json.dumps(state).encode("utf-8")
+                session_path(service).write_bytes(_encrypt_bytes(raw))
+                print(f"[BrowserAuth] Login em {SERVICE_LABELS.get(service, service)} detectado e sessão salva com sucesso"
+                      + (" (criptografada com a conta do Windows)." if _is_windows() else "."))
             else:
                 print(f"[BrowserAuth] Login em {SERVICE_LABELS.get(service, service)} não foi concluído (janela fechada ou tempo esgotado) — nada foi salvo.")
             try:
@@ -113,7 +189,9 @@ def new_context(browser, service: str):
     sp = session_path(service)
     if sp.exists():
         try:
-            return browser.new_context(storage_state=str(sp))
+            raw = _decrypt_bytes(sp.read_bytes())
+            state = json.loads(raw)
+            return browser.new_context(storage_state=state)
         except Exception as e:
-            print(f"[BrowserAuth] Sessão salva de {service} corrompida/inválida ({e}) — abrindo sem login.")
+            print(f"[BrowserAuth] Sessão salva de {service} não pôde ser lida (corrompida, de uma versão antiga sem criptografia, ou de outra conta do Windows) — faça login novamente na aba 'IA & Conexões'. Detalhe: {e}")
     return browser.new_context()
