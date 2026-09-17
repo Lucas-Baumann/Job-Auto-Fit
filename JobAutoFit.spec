@@ -41,14 +41,14 @@ pyz = PYZ(a.pure)
 # Tela de abertura (splash) com a logo do projeto, mostrada ANTES do Python terminar de
 # inicializar — o onefile precisa reextrair ~300MB (Chromium bundlado) toda vez que abre,
 # o que leva uns 8s; sem isso, a janela demora a aparecer e parece que o app travou.
+# Sem text_pos de propósito: se definido, o bootloader escreve nele o nome de cada arquivo
+# sendo extraído (centenas, do Chromium bundlado) — poluição visual tipo "texto rodando".
+# PyInstaller não suporta uma barra de progresso gráfica nativa (só texto ou imagem
+# estática), então a opção sem ruído é não mostrar texto nenhum, só a logo.
 splash = Splash(
     'splash.png',
     binaries=a.binaries,
     datas=a.datas,
-    text_pos=(20, 290),
-    text_size=11,
-    text_color='#d0d0d0',
-    text_default='Iniciando JobAutoFit...',
 )
 exe = EXE(
     pyz,
