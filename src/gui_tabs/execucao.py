@@ -74,11 +74,9 @@ class ExecucaoTabMixin:
         loc="Brasil" if self.var_work_mode.get()=="remoto" else (self.var_presencial_loc.get().strip() or "Brasil")
         min_score=int(self.var_min_score.get()); dry_run=bool(self.var_dry_run.get())
         self.proc=None; self.stop_requested=False
-        # No .exe congelado não existe python/main.py separado para chamar via subprocess (o .exe
-        # empacota só a GUI) — nesse caso roda o pipeline no mesmo processo em vez de subprocess.
-        # Parar nesse modo não termina um processo externo (não existe um): run_pipeline recebe
-        # should_stop e checa a flag entre keywords/vagas, então "Parar" ainda funciona, só não é
-        # instantâneo — a vaga/keyword em andamento termina antes de interromper.
+        # No .exe congelado não existe python/main.py separado pra chamar via subprocess —
+        # roda o pipeline no mesmo processo. "Parar" então não mata um processo externo: usa
+        # o should_stop de run_pipeline, então não é instantâneo (termina a vaga em andamento).
         frozen=bool(getattr(sys,'frozen',False))
         self.btn_stop.config(state=NORMAL)
         def target():

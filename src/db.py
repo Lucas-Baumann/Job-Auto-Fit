@@ -65,14 +65,11 @@ def _normalize_for_hash(s: str) -> str:
 
 def generate_job_hash(title: str, company: str, url: str, location: str = "") -> str:
     """Chave de deduplicação: título+empresa+localização normalizados — NÃO inclui a URL.
-    Antes incluía a URL, então a MESMA vaga publicada em dois boards diferentes (ex: Gupy e
-    InfoJobs, cada um com sua própria URL) passava como "vaga nova" nas duas, inflando as
-    métricas do Dashboard e arriscando mandar duas candidaturas pro mesmo recrutador — mais
-    provável agora que InfoJobs/GeekHunter voltaram a funcionar e rodam mais fontes em
-    paralelo por busca. Location entra na chave (em vez de só título+empresa) pra não fundir
-    duas vagas genuinamente diferentes que só coincidem nesses dois campos (ex: mesma empresa
-    abrindo a mesma vaga em cidades diferentes ao mesmo tempo). O parâmetro url é mantido por
-    compatibilidade de assinatura, mas não entra mais no hash."""
+    Antes incluía a URL, então a MESMA vaga publicada em dois boards diferentes (cada um com
+    sua própria URL) passava como "vaga nova" nas duas, inflando o Dashboard e arriscando
+    candidatura duplicada. Location entra na chave pra não fundir vagas genuinamente
+    diferentes que só coincidem em título+empresa (ex: mesma empresa, cidades diferentes).
+    O parâmetro url é mantido por compatibilidade de assinatura, mas não entra no hash."""
     raw = f"{_normalize_for_hash(title)}:{_normalize_for_hash(company)}:{_normalize_for_hash(location)}"
     return hashlib.md5(raw.encode('utf-8')).hexdigest()
 

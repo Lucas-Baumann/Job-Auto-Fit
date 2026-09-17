@@ -9,24 +9,19 @@ _project_root = Path(__file__).resolve().parent.parent
 # Detecta PyInstaller via sys._MEIPASS ou sys.frozen ou caminho com _MEI
 is_frozen = getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS') or "_MEI" in str(Path(__file__).resolve())
 if is_frozen:
-    # No .exe empacotado, o Chromium do Playwright vai bundlado dentro do próprio pacote
-    # (o build em CI instala com PLAYWRIGHT_BROWSERS_PATH=0, que grava o navegador em
-    # playwright/driver/package/.local-browsers em vez do cache global do usuário
-    # ~/.cache/ms-playwright — cache que não existe em quem só baixou o .exe). Setado aqui
-    # cedo, antes de qualquer uso do playwright, e só quando congelado: em modo dev o
-    # desenvolvedor continua usando o cache global normal do 'playwright install chromium'.
+    # Chromium do Playwright fica bundlado dentro do .exe (build em CI instala com
+    # PLAYWRIGHT_BROWSERS_PATH=0, gravando em .local-browsers em vez do cache global do
+    # usuário, que não existe em quem só baixou o .exe). Setar cedo, só quando congelado —
+    # em modo dev usa o cache global normal do 'playwright install chromium'.
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
-    # Pasta onde o .exe foi colocado pelo usuário (Desktop, Downloads, pendrive...) — usada
-    # só para localizar dados de uma instalação anterior (migração abaixo). Os dados do
-    # usuário NÃO ficam mais aqui: cada pasta onde alguém soltasse o .exe criava sua própria
-    # cópia de currículo/banco/logs, e uma pasta protegida (ex: Program Files) podia falhar
-    # ao gravar.
-    # IMPORTANTE: não dá pra comparar _legacy_dir contra "Path(__file__).resolve().parent.parent"
-    # pra detectar o build local de teste (pasta dist/) — em modo congelado, __file__ aponta pra
-    # dentro da pasta temporária de extração do PyInstaller (_MEIxxxxx), não pro repositório real,
-    # então essa comparação nunca dá igual e a migração dispararia por engano em cima dos dados
-    # reais do próprio repositório (já aconteceu uma vez durante o teste deste fix). O sinal
-    # confiável é o nome da pasta do executável ("dist") checado abaixo, guardado em _is_dev_build.
+    # Pasta onde o .exe foi colocado (usada só pra achar dados de instalação anterior, ver
+    # migração abaixo) — dados do usuário não ficam mais aqui: cada pasta onde alguém
+    # soltasse o .exe criava sua própria cópia de currículo/banco, e pastas protegidas
+    # (ex: Program Files) podiam falhar ao gravar.
+    # __file__ em modo congelado aponta pra pasta temp de extração do PyInstaller (_MEIxxxxx),
+    # não pro repositório real — por isso a detecção de build local usa o nome da pasta do
+    # executável ("dist"), não uma comparação de path, senão a migração dispararia por engano
+    # em cima dos dados do próprio repositório.
     _is_dev_build = False
     try:
         exe_path = Path(sys.executable).resolve() if hasattr(sys, 'executable') else Path(__file__).resolve()
@@ -53,10 +48,8 @@ if is_frozen:
     BASE_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "JobAutoFit"
     BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Migração única: versões anteriores gravavam tudo do lado do .exe. Se a pasta antiga
-    # tiver dados de uma instalação real (não a pasta dist/ do build local, que é o próprio
-    # repositório) e a nova ainda não, move em vez de deixar o usuário achando que perdeu
-    # currículo/chaves/histórico de vagas.
+    # Migração única: versões anteriores gravavam tudo do lado do .exe — move pra pasta nova
+    # em vez de deixar o usuário achando que perdeu currículo/chaves/histórico.
     if not _is_dev_build and _legacy_dir != BASE_DIR:
         for _name in (".env", "curriculum_base.json", "jobs.db", "jobs.db-wal", "jobs.db-shm",
                       "search_config.json", "github_selection.json", "presets.json", ".wizard_done",

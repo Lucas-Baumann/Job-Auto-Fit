@@ -1,27 +1,15 @@
 """Login via navegador real, sem guardar email/senha no app.
 
-Em vez de pedir email+senha e salvar isso no .env (mesmo com boa proteção, é uma
-credencial real de login guardada por um app de terceiro), abre um Chromium de
-verdade (o mesmo bundlado no .exe, ver JobAutoFit.spec) direto na página de login
-do site. O usuário loga do jeito que quiser — senha, "Continuar com Google", 2FA —
-e o app nunca vê nada disso: só salva a SESSÃO (cookies) localmente via
-Playwright `storage_state`, depois que detecta que o login deu certo (saiu da
-URL de login). Buscas/candidaturas seguintes reusam essa sessão carregando o
-storage_state num contexto novo, sem pedir login de novo — e se a sessão expirar,
-o app detecta e avisa (ver `session_expired`), sem travar a automação.
+Abre um Chromium de verdade (o mesmo bundlado no .exe) na página de login do site; o
+usuário loga do jeito que quiser (senha, Google, 2FA) e o app nunca vê a credencial —
+só salva a SESSÃO (cookies) via Playwright `storage_state` quando detecta que saiu da
+URL de login. Buscas/candidaturas seguintes reusam essa sessão sem pedir login de novo;
+se expirar, `session_expired` detecta e avisa sem travar a automação.
 
-Mecanismo validado empiricamente antes de implementar: salvar storage_state de um
-contexto e carregar num contexto novo preserva os cookies sem precisar logar de
-novo (testado com o próprio Playwright/Chromium bundlado no projeto).
-
-A sessão salva em disco (o cookie de login) é criptografada com o DPAPI do Windows
-(CryptProtectData/CryptUnprotectData) — a chave fica amarrada à conta do Windows que
-logou; nem copiando o arquivo pra outra máquina ou outro usuário dá pra decifrar sem
-saber a senha do Windows de quem gerou. Testado empiricamente (ida e volta) antes de
-integrar. Fora do Windows (build Linux), não existe um equivalente sem adicionar uma
-dependência de keyring do sistema que nem sempre está disponível (ex: sem daemon
-gráfico/D-Bus) — a sessão fica sem criptografia nesse caso, sem regressão (nunca teve
-proteção antes disso existir).
+A sessão em disco é criptografada com o DPAPI do Windows (chave amarrada à conta do
+Windows que logou — não decifra em outra máquina/usuário sem a senha do Windows).
+Fora do Windows não há equivalente sem uma dependência extra de keyring do sistema;
+a sessão fica sem criptografia nesse caso (sem regressão — nunca teve proteção antes).
 """
 import json
 import sys

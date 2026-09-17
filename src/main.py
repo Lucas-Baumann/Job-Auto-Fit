@@ -17,14 +17,12 @@ from logutil import log_print
 def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_posts=None, should_stop=None):
     """Executa um ciclo completo: coleta -> filtros -> ATS -> envio -> relatório.
 
-    Extraído de main() para poder ser chamado tanto pela CLI (python main.py) quanto
-    diretamente pela GUI quando ela roda como .exe congelado — nesse caso não existe um
-    python.exe nem um main.py separado para chamar via subprocess (o .exe empacota só a GUI).
+    Extraído de main() pra poder ser chamado tanto pela CLI quanto direto pela GUI quando
+    roda como .exe congelado (sem python.exe/main.py separado pra chamar via subprocess).
 
-    should_stop: callable opcional, sem argumentos, retornando bool — checado entre
-    keywords (na coleta) e entre vagas (no processamento ATS/envio) pra permitir parar a
-    automação no modo .exe congelado, onde ela roda na mesma thread da GUI em vez de um
-    subprocess que dá pra simplesmente terminar (esse é o caminho usado em modo dev)."""
+    should_stop: callable opcional retornando bool, checado entre keywords/vagas — permite
+    parar a automação no modo .exe congelado, que roda na mesma thread da GUI (sem processo
+    externo pra simplesmente terminar, como no modo dev)."""
     def _stop_requested() -> bool:
         try:
             return bool(should_stop and should_stop())

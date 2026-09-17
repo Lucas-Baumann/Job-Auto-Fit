@@ -10,10 +10,8 @@ datas = [('.env.example', '.'), ('logo.ico', '.')]
 binaries = []
 hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth','browser_auth',
                  # plyer resolve o backend de notificação por import dinâmico em runtime
-                 # (plyer/utils.py monta a string 'plyer.platforms.<os>.<recurso>' e faz
-                 # __import__) — o analisador estático do PyInstaller não enxerga isso, então
-                 # sem listar aqui manualmente o notify_desktop() falha com "No usable
-                 # implementation found!" só dentro do .exe (funciona normal rodando do fonte).
+                 # (__import__ de string montada) — o PyInstaller não enxerga isso, então sem
+                 # listar aqui o notify_desktop() falha só dentro do .exe.
                  'plyer.platforms.win.notification', 'plyer.platforms.win.libs.balloontip',
                  'plyer.platforms.linux.notification']
 
@@ -21,10 +19,9 @@ tmp = collect_all('ttkbootstrap')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 tmp = collect_all('reportlab')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
-# Inclui o driver do Playwright E o Chromium baixado (o workflow de build roda
-# 'playwright install chromium' com PLAYWRIGHT_BROWSERS_PATH=0 ANTES deste build, o que grava
-# o navegador dentro de site-packages/playwright/driver/package/.local-browsers — daí o
-# collect_all pega o navegador junto, como se fosse dado normal do pacote).
+# Inclui o driver do Playwright E o Chromium baixado (o build roda 'playwright install
+# chromium' com PLAYWRIGHT_BROWSERS_PATH=0 antes, gravando o navegador dentro do pacote,
+# de onde collect_all pega junto).
 tmp = collect_all('playwright')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 

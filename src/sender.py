@@ -46,14 +46,9 @@ def send_email_application(recipient_email: str, job_title: str, company: str, c
         return False
 
 def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> bool:
-    """
-    Automatiza o preenchimento inicial na plataforma Gupy via Playwright.
-    Preenche dados padrão e anexa o PDF otimizado.
-
-    Usa a sessão salva do login por navegador (aba 'IA & Conexões', ver browser_auth.py)
-    quando disponível — sem isso, o candidato tinha que logar manualmente dentro dessa
-    mesma janela toda vez que uma candidatura rodava.
-    """
+    """Automatiza o preenchimento inicial na Gupy via Playwright: anexa o PDF otimizado.
+    Usa a sessão salva do login por navegador (aba 'IA & Conexões') quando disponível,
+    senão o candidato teria que logar manualmente toda vez."""
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:

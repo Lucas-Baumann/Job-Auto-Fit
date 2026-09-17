@@ -4,18 +4,8 @@ python tests/test_sources_health.py
 
 Faz requisição REAL contra cada site (sem mock) e avisa se alguma fonte que deveria
 funcionar parou de retornar vaga — sinal de que o site mudou HTML/API e o seletor
-desatualizou (foi assim que descobrimos o Gupy e o InfoJobs quebrados nesta sessão,
-testando manualmente vaga por vaga). Rode antes de uma busca real, ou sempre que os
-resultados parecerem baixos demais, pra saber rápido qual fonte parou de funcionar.
-
-InfoJobs entrou de volta na lista (estava fora, documentado como quebrado — a busca usava
-o parâmetro de URL errado, 'palavra' em vez de 'palabra'/espanhol, e por isso ignorava
-qualquer termo buscado; corrigido em fetch_infojobs_jobs).
-
-GeekHunter também entrou: reavaliado nesta sessão, o site migrou pra um app novo
-(geekhunter.com/pt) cuja busca agora filtra de verdade via JSON-LD server-side — não
-precisou de Playwright, ao contrário do que a avaliação anterior (no domínio antigo)
-tinha concluído.
+desatualizou. Rode antes de uma busca real, ou quando os resultados parecerem baixos
+demais, pra saber rápido qual fonte parou de funcionar.
 
 Sai com código 0 se todas as fontes retornaram vaga, 1 se alguma falhou.
 """

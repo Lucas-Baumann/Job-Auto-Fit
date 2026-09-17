@@ -70,9 +70,7 @@ def requires_us_location(text: str) -> bool:
     ])
 
 # Códigos de 2 letras dos EUA que NÃO colidem com sigla de estado brasileiro (ex: "PA" é
-# Pensilvânia nos EUA E Pará no Brasil — ambíguo demais, melhor não usar sigla sozinha nesses
-# casos e confiar só no nome completo/menção ao país). Evita rejeitar vaga brasileira de
-# Alagoas/Maranhão/Mato Grosso/Mato Grosso do Sul/Pará/Santa Catarina por engano.
+# Pensilvânia E Pará — ambíguo, então fica de fora e confia só no nome completo/país).
 _US_STATE_CODES_UNAMBIGUOUS = {
     "AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA",
     "ME","MD","MI","MN","MO","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","RI",
@@ -88,12 +86,9 @@ _US_STATE_NAMES = [
     "virginia","washington","west virginia","wisconsin","wyoming",
 ]
 
-# Cidades dos EUA nos estados "ambíguos" acima (AL/MA/MT/MS/PA/SC), pra quando o LinkedIn
-# manda location sem sigla de estado nem nome do país — ex: "Mobile" ou "Mobile Metropolitan
-# Area" (Mobile, Alabama) passava direto pelo filtro porque AL foi deliberadamente excluído
-# de _US_STATE_CODES_UNAMBIGUOUS. Checado SÓ no campo location (nunca junto com o título),
-# pra não confundir com título de vaga brasileira tipo "Desenvolvedor Mobile" (sobre
-# desenvolvimento mobile, nada a ver com a cidade dos EUA).
+# Cidades dos EUA nos estados "ambíguos" acima, pra quando o location vem sem sigla de
+# estado nem país (ex: "Mobile", Alabama). Checado SÓ no campo location, nunca no título,
+# pra não confundir com "Desenvolvedor Mobile" (sobre desenvolvimento mobile).
 _US_AMBIGUOUS_STATE_CITIES = [
     "mobile", "birmingham", "huntsville", "tuscaloosa", "hoover",  # Alabama
     "boston", "cambridge", "worcester", "lowell", "quincy",  # Massachusetts
@@ -104,11 +99,10 @@ _US_AMBIGUOUS_STATE_CITIES = [
 ]
 
 def is_foreign_job_location(location: str, title: str = "") -> bool:
-    """Detecta vaga situada no exterior (hoje, na prática, quase sempre EUA vindo do LinkedIn)
-    pelo campo location/título — diferente de requires_us_location() (que olha o texto da
-    descrição): aqui pega vaga cuja localização já é claramente estrangeira mesmo quando a
-    descrição não usa nenhuma das frases-padrão de "só EUA". NÃO barra vaga remota brasileira
-    que aceita candidato no exterior — só barra quando a VAGA em si está localizada lá fora."""
+    """Detecta vaga situada no exterior (na prática, quase sempre EUA vindo do LinkedIn) pelo
+    campo location/título — diferente de requires_us_location(), que olha o texto da descrição.
+    NÃO barra vaga remota brasileira que aceita candidato no exterior, só quando a VAGA em si
+    está localizada lá fora."""
     combined = f"{location} {title}".lower()
     if not combined.strip():
         return False

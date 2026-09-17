@@ -107,14 +107,10 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
 def _fetch_linkedin_jobs_authenticated(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
     """Busca vagas do LinkedIn usando a sessão salva (login via navegador, aba 'IA &
     Conexões') em vez do endpoint guest — que toma bloqueio 429/999 com mais frequência e
-    devolve menos resultado por vir de um endpoint público limitado.
+    devolve menos resultado.
 
-    AVISO: diferente das outras fontes corrigidas nesta sessão (InfoJobs, GeekHunter, Catho,
-    Programathor), aqui NÃO foi possível verificar os seletores contra uma sessão real
-    logada — isso exigiria uma conta de LinkedIn de verdade pra testar, que não está
-    disponível neste ambiente. Os seletores abaixo seguem a estrutura conhecida/documentada
-    da página autenticada de busca (jobs-search-results-list etc.), mas podem precisar de
-    ajuste se vier 0 resultado mesmo logado — o print de diagnóstico avisa esse caso."""
+    AVISO: seletores nunca verificados contra uma sessão real logada (exigiria conta de
+    LinkedIn de teste, indisponível aqui); ajustar se vier 0 resultado mesmo logado."""
     jobs: List[Dict] = []
     import browser_auth
     if not browser_auth.has_session("linkedin"):
@@ -282,13 +278,9 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
 def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas do InfoJobs.
 
-    Motivo de estar quebrado antes: o parâmetro de busca da URL é 'palabra' (grafia em
-    espanhol — a InfoJobs é originalmente espanhola), não 'palavra' (português). Com o nome
-    errado, o site simplesmente ignora o termo de busca e devolve sempre a mesma página
-    genérica — confirmado comparando duas buscas com termos bem diferentes ('engenheiro de
-    dados' vs 'cozinheiro') e vendo hash idêntico do HTML com 'palavra', e hash diferente (com
-    vagas reais e corretas de cada termo) com 'palabra'. Não precisa de Playwright/JS: o HTML
-    já vem filtrado e renderizado server-side com o parâmetro certo.
+    O parâmetro de busca da URL é 'palabra' (espanhol — InfoJobs é originalmente espanhola),
+    não 'palavra'; com o nome errado o site ignora o termo e devolve sempre a mesma página
+    genérica. HTML já vem filtrado server-side, sem precisar de Playwright/JS.
     """
     jobs = []
     url = f"https://www.infojobs.com.br/empregos.aspx?palabra={requests.utils.quote(keywords)}"
@@ -340,13 +332,9 @@ def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     return jobs
 
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas públicas da Catho, com empresa/localização reais por vaga.
-
-    Antes usava o helper genérico _scrape_simple_board, que fixa 'Catho'/'Brasil' pra
-    qualquer vaga (mesma limitação que o InfoJobs tinha) — enfraquecia os filtros de
-    vaga_no_exterior/vaga_antiga pra essa fonte. 'Cliente'/'Empresa Confidencial' como nome
-    da empresa é um valor real do site (o próprio anunciante escolheu não se identificar),
-    não um bug do scraper."""
+    """Coleta vagas públicas da Catho, com empresa/localização reais por vaga (evita fixar
+    'Catho'/'Brasil' pra tudo, o que enfraquecia os filtros de vaga_no_exterior/vaga_antiga).
+    'Cliente'/'Empresa Confidencial' como nome é valor real do site, não bug do scraper."""
     jobs = []
     url = f"https://www.catho.com.br/vagas/?q={requests.utils.quote(keywords)}"
     try:
@@ -486,22 +474,12 @@ def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     return jobs
 
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
-    """Coleta vagas de TI do Programathor (focado em dev), com empresa/localização reais.
+    """Coleta vagas de TI do Programathor, com empresa/localização reais (em vez de fixar
+    'Programathor'/'Brasil'). Empresa/local vêm dos ícones fa-briefcase/fa-map-marker-alt.
 
-    Antes fixava 'Programathor'/'Brasil' pra qualquer vaga (mesma limitação do InfoJobs/Catho
-    antigos). Cada card é um <div class="cell-list"> com um <a href="/jobs/ID-slug"> por
-    dentro contendo h3 (título) e um bloco de spans com ícone+texto (empresa = ícone
-    fa-briefcase, local = ícone fa-map-marker-alt).
-
-    LIMITAÇÃO CONHECIDA (não introduzida agora, só descoberta agora ao comparar resultado de
-    duas keywords diferentes): ?q= NÃO filtra por palavra-chave nesse site — testado com
-    vários termos (inclusive 'cozinheiro', bem fora de tech) e todos devolvem exatamente os
-    mesmos ~16 cards, byte a byte quase idênticos. A página /jobs só tem filtro real por
-    facetas fixas (contract_type, nível, tamanho de empresa, remoto/presencial, cidade), sem
-    nenhum campo de busca textual livre — não existe um parâmetro correto pra descobrir, o
-    site simplesmente não expõe busca por termo aqui. Na prática esta fonte hoje é "vagas
-    recentes de tech em geral", não filtrada por keyword; mantido assim (documentado) em vez
-    de fingir que filtra."""
+    LIMITAÇÃO CONHECIDA: ?q= NÃO filtra por palavra-chave nesse site — a página /jobs só tem
+    filtro por facetas fixas (tipo de contrato, nível, remoto/presencial etc.), sem busca
+    textual livre. Esta fonte hoje é "vagas recentes de tech em geral", não por keyword."""
     jobs = []
     url = f"https://programathor.com.br/jobs?q={requests.utils.quote(keywords)}"
     try:
@@ -618,8 +596,6 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
 
         # LinkedIn redireciona busca de conteúdo pra tela de login sem sessão autenticada —
         # sem login real (via Playwright) isso SEMPRE dá 0 posts, não é seletor desatualizado.
-        # (checagem antiga aqui nunca disparava por erro de precedência de operador: "or ... if
-        # ... else" sem parênteses avalia diferente do que parece.)
         if "/uas/login" in resp.url or "/authwall" in resp.url or "/checkpoint/" in resp.url:
             print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Faça login pela aba 'IA & Conexões' (abre navegador real, sem precisar digitar senha no app) para usar login real.")
             return jobs
@@ -719,9 +695,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        # sessão salva mas Playwright não instalado (ex: .exe empacotado não inclui o
-        # Playwright + Chromium — pesado demais pra empacotar). Sem este aviso, o usuário via
-        # só "Guest encontrou 0 posts" sem entender por que o login não ajudou.
+        # sem este aviso, o usuário via só "Guest encontrou 0 posts" sem entender o motivo
         print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
         return jobs
 
@@ -783,11 +757,9 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
             browser.close()
     except Exception as e:
         msg = str(e)
-        # No Linux, o Chromium bundlado no .exe roda mas depende de bibliotecas do sistema
-        # operacional (libnss3, libatk etc.) que o PyInstaller NÃO empacota (só empacota o
-        # binário do navegador, não libs do SO) — variam por distro, então cada usuário Linux
-        # pode precisar instalar essas dependências manualmente. Sem esta mensagem, o erro cru
-        # do Playwright não deixa claro que o problema é do sistema, não do app.
+        # No Linux, o Chromium bundlado depende de libs do SO (libnss3, libatk etc.) que o
+        # PyInstaller não empacota — sem esta mensagem, o erro cru do Playwright não deixa
+        # claro que o problema é do sistema, não do app.
         if "missing dependencies" in msg.lower() or "libnss" in msg.lower() or "shared libraries" in msg.lower():
             print("[Collector][Posts] Playwright: Chromium não conseguiu abrir — faltam bibliotecas do sistema operacional (comum no Linux, varia por distro). Rode 'sudo playwright install-deps chromium' (se tiver Python+Playwright instalados) ou instale manualmente libnss3/libatk1.0-0/libgbm1 e afins via seu gerenciador de pacotes. Caindo para busca guest por enquanto.")
         else:
@@ -816,18 +788,12 @@ def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]
 def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas de tecnologia do GeekHunter.
 
-    Reavaliado nesta sessão: a versão antiga do site (geekhunter.com.br) tinha busca sem
-    refletir o termo na URL — avaliada como inviável na época (todo termo devolvia o mesmo
-    feed genérico). O site migrou pra geekhunter.com/pt (app Next.js novo) e a busca agora
-    REALMENTE filtra via ?searchTerm=, com o resultado embutido em JSON-LD server-side
-    (<script id="itemList" type="application/ld+json">, schema.org ItemList) — nada de
-    Playwright necessário. Confirmado testando termos bem diferentes ('engenheiro de dados'
-    x 'devops' x 'cozinheiro', esse último sem NENHUM resultado real por ser fora de tech,
-    já que o GeekHunter é só vagas de tecnologia) e comparando títulos/URLs retornados.
+    O site migrou de geekhunter.com.br (busca não filtrava por termo) para geekhunter.com/pt,
+    onde ?searchTerm= REALMENTE filtra, com resultado em JSON-LD server-side (schema.org
+    ItemList) — sem necessidade de Playwright.
 
-    A busca só devolve título+URL por vaga; empresa/descrição/data real vêm de um segundo
-    schema (JobPosting) na página de detalhe de cada vaga — mesmo padrão de segunda chamada
-    já usado em fetch_linkedin_job_details.
+    A busca só devolve título+URL; empresa/descrição/data vêm de um segundo schema
+    (JobPosting) na página de detalhe, mesmo padrão usado em fetch_linkedin_job_details.
     """
     jobs = []
     url = f"https://www.geekhunter.com/pt/vagas?searchTerm={requests.utils.quote(keywords)}"
@@ -902,10 +868,8 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
             break
         print(f"[Collector] Buscando vagas para '{kw}'...")
 
-        # Gupy/Remotive/InfoJobs/Catho/Programathor são fontes independentes, sem o
-        # backoff/anti-bot que o LinkedIn precisa — rodam em paralelo. Antes eram 5
-        # chamadas HTTP sequenciais por keyword (uma esperando a outra terminar); em
-        # paralelo o tempo total cai de "soma de todas as latências" para "a mais lenta".
+        # Fontes sem backoff/anti-bot próprio rodam em paralelo — tempo total cai de "soma
+        # das latências" para "a mais lenta" (LinkedIn fica de fora por precisar do backoff).
         parallel_sources = {
             "Gupy": lambda: fetch_gupy_jobs(kw, limit=limit_per_source),
             "Remotive": lambda: fetch_remotive_jobs(kw, limit=limit_per_source),
