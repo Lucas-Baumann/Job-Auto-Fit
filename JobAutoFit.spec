@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 from PyInstaller.utils.hooks import collect_all
+from PyInstaller.building.splash import Splash
 
 # curriculum_base.json NUNCA deve entrar aqui: é dado pessoal real do usuário e ficaria
 # gravado dentro do binário para sempre — quem rodasse o .exe (ou o extraísse) veria os
@@ -40,11 +41,25 @@ a = Analysis(
     noarchive=False,
 )
 pyz = PYZ(a.pure)
+# Tela de abertura (splash) com a logo do projeto, mostrada ANTES do Python terminar de
+# inicializar — o onefile precisa reextrair ~300MB (Chromium bundlado) toda vez que abre,
+# o que leva uns 8s; sem isso, a janela demora a aparecer e parece que o app travou.
+splash = Splash(
+    'splash.png',
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=(20, 290),
+    text_size=11,
+    text_color='#d0d0d0',
+    text_default='Iniciando JobAutoFit...',
+)
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
+    splash,
+    splash.binaries,
     [],
     name='JobAutoFit_v2',
     icon='logo.ico' if sys.platform == 'win32' else None,  # .ico so existe pra Windows/macOS; no Linux nao ha icone embutido em ELF

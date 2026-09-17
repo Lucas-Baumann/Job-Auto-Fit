@@ -170,4 +170,10 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
 
 
 if __name__=="__main__":
+    # Rodando 'python src/gui.py' direto (dev): este bloco executa normalmente. No .exe
+    # empacotado, quem realmente roda como __main__ é o gui.py da RAIZ do projeto (um
+    # lançador de 6 linhas que importa App daqui) — o fechamento da splash screen fica lá,
+    # não aqui (descoberto depurando por que a splash não fechava: __name__ deste módulo no
+    # build congelado é 'src.gui', nunca '__main__', então qualquer código aqui dentro deste
+    # if nunca roda no .exe).
     App().mainloop()
