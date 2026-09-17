@@ -104,8 +104,92 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
         print(f"[Collector][Gupy] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
+def _fetch_linkedin_jobs_authenticated(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
+    """Busca vagas do LinkedIn usando a sessão salva (login via navegador, aba 'IA &
+    Conexões') em vez do endpoint guest — que toma bloqueio 429/999 com mais frequência e
+    devolve menos resultado por vir de um endpoint público limitado.
+
+    AVISO: diferente das outras fontes corrigidas nesta sessão (InfoJobs, GeekHunter, Catho,
+    Programathor), aqui NÃO foi possível verificar os seletores contra uma sessão real
+    logada — isso exigiria uma conta de LinkedIn de verdade pra testar, que não está
+    disponível neste ambiente. Os seletores abaixo seguem a estrutura conhecida/documentada
+    da página autenticada de busca (jobs-search-results-list etc.), mas podem precisar de
+    ajuste se vier 0 resultado mesmo logado — o print de diagnóstico avisa esse caso."""
+    jobs: List[Dict] = []
+    import browser_auth
+    if not browser_auth.has_session("linkedin"):
+        return jobs
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return jobs
+
+    search_url = f"https://www.linkedin.com/jobs/search/?keywords={requests.utils.quote(keywords)}&location={requests.utils.quote(location)}"
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
+            ctx = browser_auth.new_context(browser, "linkedin")
+            page = ctx.new_page()
+            page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2500)
+            if browser_auth.session_expired("linkedin", page.url):
+                print("[Collector][LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest.")
+                try:
+                    from notify import notify_all
+                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
+                except Exception:
+                    pass
+                browser.close()
+                return jobs
+
+            for _ in range(2):
+                page.mouse.wheel(0, 1500)
+                page.wait_for_timeout(1200)
+
+            cards = page.query_selector_all('li.jobs-search-results__list-item, div.job-card-container, div[data-job-id]')
+            for card in cards[:limit]:
+                try:
+                    title_el = card.query_selector('a.job-card-list__title, .job-card-container__link, strong')
+                    title = title_el.inner_text().strip() if title_el else ""
+                    if not title:
+                        continue
+                    company_el = card.query_selector('.job-card-container__primary-description, .artdeco-entity-lockup__subtitle')
+                    company = company_el.inner_text().strip() if company_el else "LinkedIn Company"
+                    loc_el = card.query_selector('.job-card-container__metadata-item, .artdeco-entity-lockup__caption')
+                    loc = loc_el.inner_text().strip() if loc_el else location
+                    link_el = card.query_selector('a[href*="/jobs/view/"]')
+                    job_url = link_el.get_attribute('href') if link_el else ""
+                    if job_url and job_url.startswith('/'):
+                        job_url = "https://www.linkedin.com" + job_url
+                    if job_url:
+                        job_url = job_url.split('?')[0]
+                    desc = fetch_linkedin_job_details(job_url) if job_url else ""
+                    jobs.append({
+                        'title': title[:90],
+                        'company': company[:120],
+                        'location': loc,
+                        'url': job_url or search_url,
+                        'platform': 'linkedin',
+                        'description': desc or f"Vaga de {title} na empresa {company}.",
+                        'contact_email': extract_email(desc)
+                    })
+                    jitter_sleep(0.8, 0.4)
+                except Exception:
+                    continue
+            browser.close()
+    except Exception as e:
+        print(f"[Collector][LinkedIn] Erro na busca autenticada: {e}")
+    if not jobs:
+        print("[Collector][LinkedIn] 0 vagas via sessão autenticada — seletor pode estar desatualizado (layout mudou) ou sem resultado real; caindo para busca guest.")
+    return jobs
+
 def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
-    """Coleta vagas públicas do LinkedIn sem necessidade de login."""
+    """Coleta vagas públicas do LinkedIn. Tenta primeiro a sessão autenticada salva (menos
+    bloqueio 429/999, mais resultado); sem sessão ou sem resultado, cai pro endpoint guest
+    de sempre (sem necessidade de login)."""
+    auth_jobs = _fetch_linkedin_jobs_authenticated(keywords, location=location, limit=limit)
+    if auth_jobs:
+        return auth_jobs
     jobs = []
     if _backoff_active("linkedin"):
         return jobs
