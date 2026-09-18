@@ -69,8 +69,14 @@ class ExecucaoTabMixin:
         except Exception as e: messagebox.showerror("Preview",str(e))
     def run_automation(self):
         if not self.var_name.get().strip(): messagebox.showwarning("Validação","Informe nome"); self.nb.select(self.tab_perfil); return
+        kws=[k.strip() for k in self.var_keywords.get().split(",") if k.strip()]
+        if not kws:
+            # Antes caía num fallback silencioso pra "Desenvolvedor Python" sem avisar nada —
+            # o usuário achava que tinha rodado sem filtro nenhum e via uma busca bem
+            # específica no log, sem entender de onde veio. Agora bloqueia igual à validação
+            # de nome acima, em vez de inventar uma palavra-chave que ninguém pediu.
+            messagebox.showwarning("Validação","Informe ao menos uma palavra-chave de busca"); self.nb.select(self.tab_busca); return
         self.save_all(silent=True); self.btn_run.config(state=DISABLED); self.progress.start(12); self._log("\n=== Iniciando ===")
-        kws=[k.strip() for k in self.var_keywords.get().split(",") if k.strip()] or ["Desenvolvedor Python"]
         loc="Brasil" if self.var_work_mode.get()=="remoto" else (self.var_presencial_loc.get().strip() or "Brasil")
         min_score=int(self.var_min_score.get()); dry_run=bool(self.var_dry_run.get())
         self.proc=None; self.stop_requested=False
