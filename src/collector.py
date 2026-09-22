@@ -54,6 +54,18 @@ HIRING_KEYWORDS = [
     "job opening", "job opportunity", "apply now", "#vaga", "#vagas", "#hiring", "#oportunidade"
 ]
 
+def _boolean_hiring_query(keywords: str) -> str:
+    """Monta query booleana (AND/OR + frases entre aspas) pro buscador de conteúdo do LinkedIn,
+    no mesmo estilo de X-ray search que recrutador usa pra achar post de vaga - antes só
+    concatenava texto livre ('python developer vaga contratando hiring'), que o buscador do
+    LinkedIn trata como termos soltos (OR implícito frouxo), trazendo post que só cita uma
+    palavra qualquer sem relação com vaga nenhuma. Reaproveita HIRING_KEYWORDS (mesma lista já
+    usada em _has_hiring_keyword)."""
+    hiring_group = " OR ".join(f'"{kw}"' if " " in kw else kw for kw in HIRING_KEYWORDS)
+    kw = keywords.strip()
+    kw_term = f'"{kw}"' if " " in kw else kw
+    return f'({hiring_group}) AND {kw_term}'
+
 def extract_email(text: str) -> str:
     """Extrai e-mail de contato do texto da vaga se existente."""
     if not text:
@@ -636,8 +648,11 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
     jobs: List[Dict] = []
     if _backoff_active("linkedin_post"):
         return jobs
-    # amplia keywords com termo de contratação para melhorar precisão
-    expanded = f"{keywords} vaga contratando hiring"
+    # busca booleana (AND/OR + frases entre aspas) em vez de concatenar texto livre - o
+    # buscador de conteúdo do LinkedIn suporta a mesma sintaxe de X-ray search que
+    # recrutador usa, e isso reduz muito post fora de contexto que só batia por coincidência
+    # de palavra solta
+    expanded = _boolean_hiring_query(keywords)
     search_url = f"https://www.linkedin.com/search/results/content/?keywords={requests.utils.quote(expanded)}&origin=GLOBAL_SEARCH_HEADER&sid=jobautofit"
     try:
         resp = requests.get(search_url, headers=_headers(), timeout=12)
@@ -754,7 +769,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
         log_print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
         return jobs
 
-    expanded = f"{keywords} vaga contratando"
+    expanded = _boolean_hiring_query(keywords)
     search_url = f"https://www.linkedin.com/search/results/content/?keywords={requests.utils.quote(expanded)}&origin=GLOBAL_SEARCH_HEADER"
     try:
         with sync_playwright() as p:
@@ -827,7 +842,8 @@ def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]
     - Tenta Playwright com sessão salva (login via navegador na aba 'IA & Conexões')
     - Senão cai para scraping guest (mais frágil, mas gratuito)
     - Filtra por sinais de recrutador + keywords de contratação
-    - Expande keywords automaticamente: 'python developer' -> 'python developer vaga contratando hiring'
+    - Monta query booleana real (AND/OR + frases entre aspas), estilo X-ray search:
+      'python developer' -> ("vaga" OR "contratando" OR "hiring" OR ...) AND "python developer"
     """
     log_print(f"[Collector][Posts] Buscando posts de recrutadores para '{keywords}'...")
     # 1. tenta Playwright se tiver sessão salva
