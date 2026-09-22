@@ -8,7 +8,7 @@ from PyInstaller.building.splash import Splash
 # dados de quem compilou. O código já lida bem com a ausência do arquivo (fica em branco).
 datas = [('.env.example', '.'), ('logo.ico', '.')]
 binaries = []
-hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','exporters','geo','validator','stealth','browser_auth',
+hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','geo','validator','stealth','browser_auth',
                  # plyer resolve o backend de notificação por import dinâmico em runtime
                  # (__import__ de string montada) — o PyInstaller não enxerga isso, então sem
                  # listar aqui o notify_desktop() falha só dentro do .exe.
