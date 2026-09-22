@@ -43,6 +43,44 @@ def detect_level(title: str, desc: str) -> str:
         return "senior"
     return "nao_especificado"
 
+_REMOTE_SIGNALS = ["remoto", "remote", "home office", "trabalho remoto", "100% remoto", "full remote", "totalmente remoto", "work from home", "wfh", "anywhere"]
+_HYBRID_SIGNALS = ["híbrido", "hibrido", "hybrid", "modelo híbrido", "parcialmente remoto"]
+_ONSITE_SIGNALS = ["presencial", "on-site", "onsite", "in-office", "no escritório", "comparecer ao escritório"]
+
+def detect_work_mode(location: str, title: str, desc: str) -> str:
+    """Detecta regime de trabalho (remoto/hibrido/presencial) por sinais de texto — heurística
+    baseada em palavra-chave, como detect_level; pode errar, mas é melhor que não filtrar nada
+    (comportamento anterior: o Regime da GUI não filtrava vaga nenhuma, só mudava o texto da
+    busca). Retorna 'indefinido' se não achar nenhum sinal, e nesse caso a vaga NÃO é rejeitada
+    (mesma filosofia do nível 'nao_especificado')."""
+    t = f"{location} {title} {desc}".lower()
+    has_remote = any(s in t for s in _REMOTE_SIGNALS)
+    has_hybrid = any(s in t for s in _HYBRID_SIGNALS)
+    has_onsite = any(s in t for s in _ONSITE_SIGNALS)
+    if has_hybrid:
+        return "hibrido"
+    if has_remote and not has_onsite:
+        return "remoto"
+    if has_onsite:
+        return "presencial"
+    return "indefinido"
+
+_CLT_SIGNALS = [r"\bclt\b", r"carteira assinada", r"regime clt"]
+_PJ_SIGNALS = [r"\bpj\b", r"pessoa jur[íi]dica", r"presta[çc][ãa]o de servi[çc]o"]
+
+def detect_contract_type(title: str, desc: str) -> str:
+    """Detecta CLT/PJ por sinais de texto — mesma heurística/limitação de detect_work_mode.
+    'pj' isolado é ambíguo o bastante (2 letras) pra justificar \\b (word boundary) em vez de
+    substring simples, evitando casar dentro de outra palavra."""
+    t = f"{title} {desc}".lower()
+    has_clt = any(re.search(p, t) for p in _CLT_SIGNALS)
+    has_pj = any(re.search(p, t) for p in _PJ_SIGNALS)
+    if has_clt and not has_pj:
+        return "clt"
+    if has_pj and not has_clt:
+        return "pj"
+    return "indefinido"
+
 def is_pcd(text: str) -> bool:
     if not text: return False
     t=text.lower()
@@ -157,7 +195,10 @@ def parse_published_days(job: Dict) -> int | None:
 
 def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
     """
-    cfg keys: min_salary, level, exclude_keywords[], max_age_days, only_pcd, english_filter (indiferente/sim/nao), blocked_companies[], mandatory_words[], max_distance_km (não usado estritamente, filtra por cidade se >0)
+    cfg keys: min_salary, level, exclude_keywords[], max_age_days, only_pcd, english_filter
+    (indiferente/sim/nao), blocked_companies[], mandatory_words[], work_mode
+    (indiferente/remoto/presencial/hibrido), contract_type (indiferente/clt/pj),
+    presencial_location (nome de cidade, só filtra se work_mode for presencial/hibrido)
     Retorna (passou, motivo_rejeição)
     """
     title = job.get("title","") or ""
@@ -180,8 +221,6 @@ def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
     for b in cfg.get("blocked_companies",[]):
         if b.lower() in company_l:
             return False, f"empresa_bloqueada:{b}"
-
-    # 4. Favoritas não bloqueia, apenas para relatório - ignorado aqui
 
     # 5. Salário mínimo
     min_sal = int(cfg.get("min_salary",0) or 0)
@@ -232,10 +271,32 @@ def matches_filters(job: Dict, cfg: Dict) -> tuple[bool, str]:
         if age is not None and age > max_age:
             return False, f"vaga_antiga:{age}d>{max_age}d"
 
-    # 10. Distância km - simplificado: se presencial e cidade não bate, rejeita
-    # cfg[max_distance_km] >0 e presencial_location definido -> exige que location contenha cidade
-    # Implementação aproximada (sem geocoding)
-    # Deixar para gui validar
+    # 10. Regime de trabalho (remoto/presencial/híbrido) — antes só mudava o texto da busca,
+    # não filtrava vaga nenhuma de verdade (Gupy/LinkedIn/Catho/etc. podiam devolver vaga
+    # presencial mesmo com "Regime: remoto" selecionado).
+    work_mode_cfg = cfg.get("work_mode", "indiferente")
+    if work_mode_cfg and work_mode_cfg != "indiferente":
+        detected_mode = detect_work_mode(job.get("location",""), title, desc)
+        if detected_mode != "indefinido" and detected_mode != work_mode_cfg:
+            return False, f"regime_incompativel:{detected_mode}!={work_mode_cfg}"
+
+    # 11. Tipo de contrato (CLT/PJ) — mesmo problema do regime: salvo na config, nunca lido.
+    contract_cfg = cfg.get("contract_type", "indiferente")
+    if contract_cfg and contract_cfg != "indiferente":
+        detected_contract = detect_contract_type(title, desc)
+        if detected_contract != "indefinido" and detected_contract != contract_cfg:
+            return False, f"contrato_incompativel:{detected_contract}!={contract_cfg}"
+
+    # 12. Localização presencial/híbrido — antes só mudava o texto da busca (mesmo problema).
+    # Match por nome de cidade no texto (sem geocoding: cfg não tem campo de raio em km na
+    # GUI hoje, e chamar Nominatim por vaga no meio do filtro síncrono adicionaria uma
+    # dependência de rede lenta/instável a um caminho que hoje é 100% local e rápido).
+    presencial_loc = (cfg.get("presencial_location") or "").strip()
+    if presencial_loc and work_mode_cfg in ("presencial", "hibrido"):
+        cidade = presencial_loc.split(",")[0].strip().lower()
+        job_loc_l = (job.get("location","") or "").lower()
+        if cidade and job_loc_l and cidade not in job_loc_l and not any(s in job_loc_l for s in _REMOTE_SIGNALS):
+            return False, f"cidade_diferente:{job.get('location','')}!={presencial_loc}"
 
     return True, "ok"
 

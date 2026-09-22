@@ -62,8 +62,6 @@ class BuscaTabMixin:
         tb.Button(card2,text="Sugerir do currículo (preenche com suas skills)",bootstyle="info-outline",command=self.suggest_mandatory).pack(anchor=W,pady=2)
         r3=tb.Frame(card2); r3.pack(fill=X,pady=(6,0)); tb.Label(r3,text="Empresas bloqueadas (vírgula)").pack(side=LEFT); info_icon(r3, "Empresas que você NÃO quer — vagas delas são ignoradas.\nEx: Empresa X, Consultoria Y").pack(side=LEFT)
         tb.Entry(card2,textvariable=self.var_blocked).pack(fill=X,pady=2)
-        r4=tb.Frame(card2); r4.pack(fill=X,pady=(6,0)); tb.Label(r4,text="Empresas favoritas (destaca no relatório, vírgula)").pack(side=LEFT); info_icon(r4, "Apenas destaca no relatório HTML, não filtra.\nUse para priorizar visualmente.").pack(side=LEFT)
-        tb.Entry(card2,textvariable=self.var_fav).pack(fill=X,pady=2)
         card3=tb.Labelframe(inner,text="Parâmetros ATS",padding=10,bootstyle="success"); card3.pack(fill=X,pady=5)
         row=tb.Frame(card3); row.pack(fill=X)
         tb.Label(row,text="Score mínimo %").pack(side=LEFT,padx=5); tb.Scale(row,from_=0,to=100,variable=self.var_min_score,length=200,bootstyle="success").pack(side=LEFT,padx=5); tb.Label(row,textvariable=self.var_min_score,width=4).pack(side=LEFT)
