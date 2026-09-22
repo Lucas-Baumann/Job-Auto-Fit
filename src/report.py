@@ -1,4 +1,5 @@
 import os
+import html
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
@@ -9,6 +10,21 @@ def _esc_attr(v) -> str:
     """Escapa valor pra caber com segurança dentro de um atributo HTML (data-value=\"...\")
     — título/empresa/local vêm de scraping e podem ter aspas ou '&' sem aviso."""
     return str(v or "").replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+def _esc(v) -> str:
+    """Escapa texto vindo de scraping (título/empresa/local/descrição) antes de colocar no
+    CORPO do HTML — sem isso, uma vaga com '<script>' na descrição executa no navegador de
+    quem abre o relatório. _esc_attr acima só cobre o data-value dos atributos, não o texto
+    visível das células da tabela."""
+    return html.escape(str(v or ""), quote=True)
+
+def _esc_url(v) -> str:
+    """Só permite URL http(s); qualquer outro esquema (javascript:, data:, etc.) vindo de uma
+    vaga maliciosa vira link morto em vez de executar algo ao clicar."""
+    u = str(v or "").strip()
+    if not u.lower().startswith(("http://", "https://")):
+        return "#"
+    return html.escape(u, quote=True)
 
 # Ordenação por clique no cabeçalho da tabela (mesmo padrão de 3 estados do Histórico da GUI:
 # crescente -> decrescente -> sem ordenação) — puro JS vanilla, sem lib nenhuma, porque o
@@ -87,23 +103,26 @@ def generate_html_report(jobs: List[Dict], output_file: Path) -> Path:
         desc = j.get('description', '') or ''
         short_desc = (desc[:250] + '...') if len(desc) > 250 else desc
 
-        resume_link = f"<a href='file:///{j.get('resume_pdf_path')}' target='_blank'>[PDF] Ver CV</a>" if j.get('resume_pdf_path') else "-"
-        cover_link = f"<a href='file:///{j.get('cover_letter_path')}' target='_blank'>[TXT] Ver Carta</a>" if j.get('cover_letter_path') else "-"
+        # file:/// aqui é caminho que o próprio app gerou (não vem de scraping), então não
+        # precisa do mesmo tratamento de _esc_url — mas o texto ainda passa por _esc por
+        # padrão de higiene (path no Windows não deveria ter '<'/'>' mas não custa nada).
+        resume_link = f"<a href='file:///{_esc(j.get('resume_pdf_path'))}' target='_blank'>[PDF] Ver CV</a>" if j.get('resume_pdf_path') else "-"
+        cover_link = f"<a href='file:///{_esc(j.get('cover_letter_path'))}' target='_blank'>[TXT] Ver Carta</a>" if j.get('cover_letter_path') else "-"
 
         rows_html += f"""
         <tr>
             <td><strong>#{idx}</strong></td>
             <td data-col="title" data-value="{_esc_attr(j.get('title'))}">
-                <strong>{j.get('title')}</strong><br>
-                <small style="color: #666;">Plataforma: {j.get('platform', '').upper()}</small>
+                <strong>{_esc(j.get('title'))}</strong><br>
+                <small style="color: #666;">Plataforma: {_esc(j.get('platform', '').upper())}</small>
             </td>
-            <td data-col="company" data-value="{_esc_attr(j.get('company'))}">{j.get('company')}</td>
-            <td data-col="location" data-value="{_esc_attr(j.get('location', 'N/A'))}">{j.get('location', 'N/A')}</td>
+            <td data-col="company" data-value="{_esc_attr(j.get('company'))}">{_esc(j.get('company'))}</td>
+            <td data-col="location" data-value="{_esc_attr(j.get('location', 'N/A'))}">{_esc(j.get('location', 'N/A'))}</td>
             <td data-col="match" data-value="{score}"><span class="score-pill {score_class}">{score}%</span></td>
             <td data-col="status" data-value="{_esc_attr(status)}">{status_badge}</td>
-            <td><div class="desc-box">{short_desc}</div></td>
+            <td><div class="desc-box">{_esc(short_desc)}</div></td>
             <td>
-                <a href="{j.get('url')}" target="_blank" class="btn-link">[Link] Abrir Vaga</a><br>
+                <a href="{_esc_url(j.get('url'))}" target="_blank" class="btn-link">[Link] Abrir Vaga</a><br>
                 {resume_link}<br>
                 {cover_link}
             </td>

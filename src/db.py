@@ -1,7 +1,7 @@
 import sqlite3
 import hashlib
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from config import Config
 
 def get_db_connection():
@@ -121,7 +121,9 @@ def update_job_match(job_id: int, score: int, reason: str, status: str = None):
 def update_job_status(job_id: int, status: str, resume_path: str = None, cover_path: str = None):
     conn = get_db_connection()
     cursor = conn.cursor()
-    applied_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if status == 'applied' else None
+    # UTC pra bater com created_at (CURRENT_TIMESTAMP do SQLite também é UTC) — mesma
+    # inconsistência corrigida em main.py:session_start_iso.
+    applied_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if status == 'applied' else None
     
     cursor.execute("""
         UPDATE jobs 

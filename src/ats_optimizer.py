@@ -215,7 +215,13 @@ Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de codigo):
             clean_json = response_text.replace("```json", "").replace("```", "").strip()
             parsed = json.loads(clean_json)
 
-            score = parsed.get("match_score", 50)
+            # a IA às vezes devolve match_score como string (ex: "85") em vez de int — sem o
+            # cast, a comparação "score >= min_score" em main.py quebra com TypeError e a vaga
+            # é marcada como 'failed' mesmo tendo um match real alto.
+            try:
+                score = max(0, min(100, int(parsed.get("match_score", 50))))
+            except (TypeError, ValueError):
+                score = 50
             reason = parsed.get("match_reason", reason)
             optimized_summary = parsed.get("optimized_summary", "")
             optimized_skills = parsed.get("optimized_skills", [])

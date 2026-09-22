@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import Counter
 
 import json
@@ -39,7 +39,10 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
 
     # 1. Inicializar Banco de Dados
     init_db()
-    session_start_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # CURRENT_TIMESTAMP do SQLite (usado em created_at, db.py) é UTC — usar datetime.now()
+    # (hora local) aqui misturava os dois: no Brasil (UTC-3), o relatório "desta sessão"
+    # acabava puxando vagas de até 3h ANTES do início real da execução.
+    session_start_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     # 2. Coletar Vagas (Gupy, LinkedIn, Remotive, ...)
     filter_cfg = {}

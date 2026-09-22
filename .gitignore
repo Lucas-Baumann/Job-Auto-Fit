@@ -9,6 +9,7 @@ github_selection.json
 .wizard_done
 presets.json
 curriculum_base.json
+*_session.json
 
 # Gerados
 logs/
