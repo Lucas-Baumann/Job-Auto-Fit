@@ -88,6 +88,11 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "minimax/minimax-m3:free")  # vision free: minimax-m3, nemotron-3-nano-omni
+    # Modelos de reserva se OPENROUTER_MODEL falhar (ex: virou pago sem aviso) — fonte única
+    # usada por ats_optimizer.py (ordem de tentativa) e pelo dropdown da GUI (ia.py), pra não
+    # ter 4 lugares com slug de modelo divergente entre si (já aconteceu: .env.example citava
+    # um modelo, o fallback do código citava outro parecido mas não idêntico).
+    OPENROUTER_FALLBACK_MODELS = ["z-ai/glm-5.2:free", "google/gemma-4-31b-it:free"]
     CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "")
     CUSTOM_LLM_KEY = os.getenv("CUSTOM_LLM_KEY", "")
 

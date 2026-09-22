@@ -109,7 +109,14 @@ class BuscaTabMixin:
         try: posts_lim = int(self.var_linkedin_posts_limit.get())
         except: posts_lim=8
         enable_posts = bool(self.var_enable_linkedin_posts.get()) if hasattr(self, 'var_enable_linkedin_posts') else False
-        has_login = bool(self.var_linkedin_email.get().strip() and self.var_linkedin_pass.get().strip()) if hasattr(self, 'var_linkedin_email') else False
+        # var_linkedin_email/var_linkedin_pass não existem mais desde que o login virou sessão
+        # de navegador (browser_auth.py) — o hasattr sempre caía em False, então o aviso
+        # assumia "sem login" mesmo com sessão ativa salva na aba IA & Conexões.
+        try:
+            import browser_auth
+            has_login = browser_auth.has_session("linkedin")
+        except Exception:
+            has_login = False
         if lim > 12:
             msgs.append(f"Vagas/fonte={lim} (>12) → risco 429/softban LinkedIn/Gupy")
         elif lim > 10:

@@ -56,7 +56,10 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     enable_posts = filter_cfg.get("enable_linkedin_posts", True)
     if enable_linkedin_posts is not None:
         enable_posts = enable_linkedin_posts
-    linkedin_posts_limit = int(filter_cfg.get("linkedin_posts_limit", filter_cfg.get("limit_per_source", 8)) or 8)
+    # "or 8" tratava um 0 explícito (definido de propósito, ex: editando o JSON na mão) como
+    # "não informado" e substituía pelo default — "is not None" respeita um 0 real.
+    _raw_posts_limit = filter_cfg.get("linkedin_posts_limit", filter_cfg.get("limit_per_source", 8))
+    linkedin_posts_limit = int(_raw_posts_limit) if _raw_posts_limit is not None else 8
     if enable_posts:
         log_print(f"[*] Posts de recrutadores LinkedIn: ATIVADO (limite {linkedin_posts_limit}/keyword)")
     else:
@@ -81,8 +84,9 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
             breakdown = ", ".join(f"{motivo} ({qtd})" for motivo, qtd in rejected.most_common())
             log_print(f"[Filtros] Motivos de rejeição: {breakdown}")
 
-    # daily limit
-    daily_limit = int(filter_cfg.get("daily_limit", Config.DAILY_LIMIT) or Config.DAILY_LIMIT)
+    # daily limit — mesma correção do "or" acima: 0 explícito não deve virar o default.
+    _raw_daily_limit = filter_cfg.get("daily_limit", Config.DAILY_LIMIT)
+    daily_limit = int(_raw_daily_limit) if _raw_daily_limit is not None else Config.DAILY_LIMIT
     # contar já processados hoje (inclui ready_to_send: já consumiram cota de geração/IA hoje)
     try:
         con = get_db_connection()

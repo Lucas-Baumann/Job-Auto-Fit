@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import hashlib
 import requests
@@ -99,13 +100,13 @@ def call_llm(prompt: str) -> str:
     if provider == "openrouter" and Config.OPENROUTER_API_KEY:
         # Modelos para tentar (ordem de preferência). Modelos ":free" da OpenRouter mudam de
         # disponibilidade sem aviso (ex: minimax-m3:free virou pago, mesmo problema que já
-        # tivemos com o Gemini) — troque estes fallbacks se algum começar a falhar sempre com
-        # 404 "unavailable for free" (confira a lista atual em openrouter.ai/models?max_price=0).
+        # tivemos com o Gemini) — a lista de reserva vem de Config.OPENROUTER_FALLBACK_MODELS
+        # (fonte única, também usada pelo dropdown da GUI em ia.py) — troque lá se algum
+        # começar a falhar sempre com 404 "unavailable for free" (lista atual em
+        # openrouter.ai/models?max_price=0).
         models_to_try = []
         seen = set()
-        for m in [Config.OPENROUTER_MODEL,
-                  "z-ai/glm-5.2:free",
-                  "google/gemma-4-31b-it:free"]:
+        for m in [Config.OPENROUTER_MODEL] + Config.OPENROUTER_FALLBACK_MODELS:
             if m and m not in seen:
                 seen.add(m)
                 models_to_try.append(m)
@@ -305,13 +306,22 @@ def generate_ats_pdf(cv_data: dict, output_path: Path):
             
     doc.build(story)
 
+def _slugify_filename(name: str) -> str:
+    """Sanitiza texto vindo de scraping (nome de empresa) pra uso seguro em nome de arquivo —
+    caracteres inválidos em path do Windows (`/ \\ : * ? " < > |`) numa empresa tipo
+    'Grupo ABC/Filial SP' quebravam a escrita do PDF/carta."""
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name or "")
+    name = re.sub(r'\s+', '_', name.strip())
+    return name[:80] or "empresa"
+
 def process_job_ats(job_id: int, job_title: str, company: str, job_description: str) -> dict:
     """Orquestra a análise ATS e a geração dos arquivos (PDF e Cover Letter)."""
     base_cv = load_base_curriculum()
     score, reason, optimized_cv, cover_letter = evaluate_and_optimize_resume(job_title, company, job_description, base_cv)
-    
-    pdf_filename = Config.OUTPUT_DIR / f"CV_{company.replace(' ', '_')}_{job_id}.pdf"
-    cover_filename = Config.OUTPUT_DIR / f"CoverLetter_{company.replace(' ', '_')}_{job_id}.txt"
+
+    company_slug = _slugify_filename(company)
+    pdf_filename = Config.OUTPUT_DIR / f"CV_{company_slug}_{job_id}.pdf"
+    cover_filename = Config.OUTPUT_DIR / f"CoverLetter_{company_slug}_{job_id}.txt"
     
     # Gerar PDF
     generate_ats_pdf(optimized_cv, pdf_filename)

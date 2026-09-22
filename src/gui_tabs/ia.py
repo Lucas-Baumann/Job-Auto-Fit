@@ -49,7 +49,11 @@ class IATabMixin:
         self.frame_openrouter=tb.Frame(self.frame_ia_dynamic)
         tb.Label(self.frame_openrouter,text="OpenRouter Key").pack(side=LEFT,padx=5); self.ent_openrouter=tb.Entry(self.frame_openrouter,textvariable=self.var_openrouter_key,show="*",width=28); self.ent_openrouter.pack(side=LEFT,padx=5)
         info_icon(self.frame_openrouter, "openrouter.ai/keys → Free tier :free sem cartão").pack(side=LEFT)
-        tb.Label(self.frame_openrouter,text="Modelo").pack(side=LEFT,padx=5); self.combo_openrouter_model=tb.Combobox(self.frame_openrouter,textvariable=self.var_openrouter_model,values=["minimax/minimax-m3:free","nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],width=42); self.combo_openrouter_model.pack(side=LEFT,padx=5)
+        tb.Label(self.frame_openrouter,text="Modelo").pack(side=LEFT,padx=5)
+        # valores vêm de Config (config.py) — fonte única com o fallback usado de verdade em
+        # ats_optimizer.py; antes essa lista tinha modelos diferentes dos realmente tentados.
+        _or_models=[Config.OPENROUTER_MODEL]+[m for m in Config.OPENROUTER_FALLBACK_MODELS if m!=Config.OPENROUTER_MODEL]
+        self.combo_openrouter_model=tb.Combobox(self.frame_openrouter,textvariable=self.var_openrouter_model,values=_or_models,width=42); self.combo_openrouter_model.pack(side=LEFT,padx=5)
         tb.Button(self.frame_openrouter,text="↗ Lista free",bootstyle="info-outline",width=10,command=lambda: webbrowser.open("https://openrouter.ai/models?max_price=0")).pack(side=LEFT,padx=5)
         info_icon(self.frame_openrouter, "Digite manualmente o slug :free visto na lista (copie de openrouter.ai/models?max_price=0). Lista muda; se 404, tente outro.").pack(side=LEFT)
         self.frame_custom=tb.Frame(self.frame_ia_dynamic)
