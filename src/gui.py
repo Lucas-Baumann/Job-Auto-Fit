@@ -173,9 +173,15 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         try: self.log_text.insert(tk.END,"[Save] ok\n"); self.log_text.see(tk.END)
         except: pass
     def export_config(self):
+        # antes exportava só 4 chaves fixas do .env (GEMINI_API_KEY/LLM_PROVIDER/TELEGRAM_*) -
+        # trocar de PC perdia SMTP, GitHub token e as outras chaves de IA (OpenAI/Claude/Groq/
+        # OpenRouter/Custom) sem aviso nenhum. self.save_all() garante que self.env reflita os
+        # campos atuais da tela antes de exportar, e exporta o dict inteiro (sem lista fixa
+        # que fica desatualizada toda vez que um campo novo é adicionado).
+        self.save_all(silent=True)
         p=filedialog.asksaveasfilename(defaultextension=".json",filetypes=[("JSON","*.json")],initialfile=f"jobautofit_backup_{datetime.now().strftime('%Y%m%d')}.json")
         if not p: return
-        data={"curriculum":self.curriculum,"search_config":self.search_cfg,"env":{k:self.env.get(k,"") for k in ["GEMINI_API_KEY","LLM_PROVIDER","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID"]}}
+        data={"curriculum":self.curriculum,"search_config":self.search_cfg,"env":dict(self.env)}
         Path(p).write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8"); messagebox.showinfo("Exportar",f"Salvo em {p}")
     def import_config(self):
         p=filedialog.askopenfilename(filetypes=[("JSON","*.json")])
@@ -187,6 +193,18 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
                 pi=self.curriculum.get("personal_info",{}); self.var_name.set(pi.get("name","")); self.var_email.set(pi.get("email","")); self.var_phone.set(pi.get("phone","")); self.var_location.set(pi.get("location","")); self.var_linkedin.set(pi.get("linkedin","")); self.var_github.set(pi.get("github","")); self.txt_summary.delete("1.0",tk.END); self.txt_summary.insert("1.0",self.curriculum.get("summary","")); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list()
             if "search_config" in data:
                 sc=data["search_config"]; self.var_keywords.set(", ".join(sc.get("keywords",[]))); self.var_work_mode.set(sc.get("work_mode","remoto")); self.var_presencial_loc.set(sc.get("presencial_location","")); self.var_contract.set(sc.get("contract_type","indiferente")); self.var_min_score.set(sc.get("min_score",60)); self.var_limit.set(sc.get("limit_per_source",8)); self.var_min_salary.set(sc.get("min_salary",0)); self.var_level.set(sc.get("level","indiferente")); self.var_exclude.set(", ".join(sc.get("exclude_keywords",[]))); self.var_mandatory.set(", ".join(sc.get("mandatory_words",[]))); self.var_blocked.set(", ".join(sc.get("blocked_companies",[]))); self.var_fav.set(", ".join(sc.get("favorite_companies",[]))); self.var_max_age.set(sc.get("max_age_days",0)); self.var_only_pcd.set(sc.get("only_pcd",False)); self.var_english.set(sc.get("english_filter","indiferente")); self.var_daily_limit.set(sc.get("daily_limit",20)); self.var_telegram_token.set(sc.get("telegram_bot_token","")); self.var_telegram_chat.set(sc.get("telegram_chat_id","")); save_search_config(sc)
+            if "env" in data:
+                # antes o import não lia essa seção de volta em lugar nenhum - nem as 4 chaves
+                # que o export antigo salvava. Agora repopula todos os campos de IA/SMTP/GitHub.
+                self.env.update(data["env"]); save_env_dict(self.env)
+                self.var_gemini_key.set(self.env.get("GEMINI_API_KEY","")); self.var_gemini_model.set(self.env.get("GEMINI_MODEL","gemini-flash-latest"))
+                self.var_llm_provider.set(self.env.get("LLM_PROVIDER","gemini"))
+                self.var_ollama_host.set(self.env.get("OLLAMA_HOST","http://localhost:11434")); self.var_ollama_model.set(self.env.get("OLLAMA_MODEL","llama3:latest"))
+                self.var_openai_key.set(self.env.get("OPENAI_API_KEY","")); self.var_claude_key.set(self.env.get("CLAUDE_API_KEY","")); self.var_groq_key.set(self.env.get("GROQ_API_KEY",""))
+                self.var_openrouter_key.set(self.env.get("OPENROUTER_API_KEY","")); self.var_openrouter_model.set(self.env.get("OPENROUTER_MODEL","minimax/minimax-m3:free"))
+                self.var_custom_url.set(self.env.get("CUSTOM_LLM_URL","")); self.var_custom_key.set(self.env.get("CUSTOM_LLM_KEY",""))
+                self.var_smtp_host.set(self.env.get("SMTP_HOST","smtp.gmail.com")); self.var_smtp_port.set(self.env.get("SMTP_PORT","587")); self.var_smtp_user.set(self.env.get("SMTP_USER","")); self.var_smtp_pass.set(self.env.get("SMTP_PASS",""))
+                self.var_github_token.set(self.env.get("GITHUB_TOKEN",""))
             messagebox.showinfo("Importar","Importado com sucesso!")
         except Exception as e: messagebox.showerror("Importar",str(e))
 

@@ -37,7 +37,7 @@ def _backoff_active(key: str) -> bool:
 
 def _trip_backoff(key: str, status_code):
     if not _RUN_BACKOFF.get(key, False):
-        print(f"[Collector] {key}: recebido {status_code} — pausando esta fonte pelo resto da execução.")
+        log_print(f"[Collector] {key}: recebido {status_code} — pausando esta fonte pelo resto da execução.")
     _RUN_BACKOFF[key] = True
 
 # --- LinkedIn Posts: sinais de recrutador e de contratação ---
@@ -70,10 +70,14 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
     do Next.js) embutido na própria página pública de busca, que ainda mostra os dados reais
     sem login."""
     jobs = []
+    if _backoff_active("gupy"):
+        return jobs
     url = f"https://portal.gupy.io/job-search/term={requests.utils.quote(keywords)}"
     try:
         response = requests.get(url, headers=_headers(), timeout=10)
-        if response.status_code == 200:
+        if response.status_code in (429, 999):
+            _trip_backoff("gupy", response.status_code)
+        elif response.status_code == 200:
             m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', response.text, re.S)
             results = []
             if m:
@@ -101,9 +105,9 @@ def fetch_gupy_jobs(keywords: str, limit: int = 15) -> List[Dict]:
                     'published_at': item.get('publishedDate'),
                 })
     except Exception as e:
-        print(f"[Collector] Erro ao buscar vagas na Gupy: {e}")
+        log_print(f"[Collector] Erro ao buscar vagas na Gupy: {e}")
     if not jobs:
-        print(f"[Collector][Gupy] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+        log_print(f"[Collector][Gupy] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 def _fetch_linkedin_jobs_authenticated(keywords: str, location: str = "Brasil", limit: int = 15) -> List[Dict]:
@@ -252,7 +256,7 @@ def fetch_linkedin_jobs(keywords: str, location: str = "Brasil", limit: int = 15
                     })
                     jitter_sleep(1.0, 0.4) # pausa com variação — ritmo menos robótico
     except Exception as e:
-        print(f"[Collector] Erro ao buscar vagas no LinkedIn: {e}")
+        log_print(f"[Collector] Erro ao buscar vagas no LinkedIn: {e}")
         
     return jobs
 
@@ -276,11 +280,15 @@ def fetch_linkedin_job_details(job_url: str) -> str:
 def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas remotas da API pública e gratuita da Remotive."""
     jobs = []
+    if _backoff_active("remotive"):
+        return jobs
     url = f"https://remotive.com/api/remote-jobs?search={requests.utils.quote(keywords)}"
-    
+
     try:
         response = requests.get(url, headers=_headers(), timeout=10)
-        if response.status_code == 200:
+        if response.status_code in (429, 999):
+            _trip_backoff("remotive", response.status_code)
+        elif response.status_code == 200:
             data = response.json()
             results = data.get('jobs', [])
             for item in results[:limit]:
@@ -298,7 +306,7 @@ def fetch_remotive_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                     'contact_email': extract_email(clean_desc)
                 })
     except Exception as e:
-        print(f"[Collector] Erro ao buscar vagas no Remotive: {e}")
+        log_print(f"[Collector] Erro ao buscar vagas no Remotive: {e}")
         
     return jobs
 
@@ -310,10 +318,14 @@ def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     genérica. HTML já vem filtrado server-side, sem precisar de Playwright/JS.
     """
     jobs = []
+    if _backoff_active("infojobs"):
+        return jobs
     url = f"https://www.infojobs.com.br/empregos.aspx?palabra={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("infojobs", resp.status_code)
+        elif resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select('div[id^="vacancy"]')[:limit]
             for card in cards:
@@ -353,9 +365,9 @@ def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 })
                 jitter_sleep(0.5, 0.3)
     except Exception as e:
-        print(f"[Collector] InfoJobs erro: {e}")
+        log_print(f"[Collector] InfoJobs erro: {e}")
     if not jobs:
-        print(f"[Collector][InfoJobs] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+        log_print(f"[Collector][InfoJobs] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
@@ -363,10 +375,14 @@ def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     'Catho'/'Brasil' pra tudo, o que enfraquecia os filtros de vaga_no_exterior/vaga_antiga).
     'Cliente'/'Empresa Confidencial' como nome é valor real do site, não bug do scraper."""
     jobs = []
+    if _backoff_active("catho"):
+        return jobs
     url = f"https://www.catho.com.br/vagas/?q={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("catho", resp.status_code)
+        elif resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select("article")[:limit]
             for card in cards:
@@ -399,9 +415,9 @@ def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 })
                 jitter_sleep(0.5, 0.3)
     except Exception as e:
-        print(f"[Collector] Catho erro: {e}")
+        log_print(f"[Collector] Catho erro: {e}")
     if not jobs:
-        print(f"[Collector][Catho] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+        log_print(f"[Collector][Catho] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
@@ -415,9 +431,13 @@ def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     ascii_kw = unicodedata.normalize("NFKD", keywords).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_kw.lower()).strip("-")
     url = f"https://www.vagas.com.br/vagas-de-{slug}"
+    if _backoff_active("vagascom"):
+        return jobs
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("vagascom", resp.status_code)
+        elif resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select("li.vaga")[:limit]
             for card in cards:
@@ -448,9 +468,9 @@ def fetch_vagascom_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 })
                 time.sleep(0.5)
     except Exception as e:
-        print(f"[Collector] Vagas.com erro: {e}")
+        log_print(f"[Collector] Vagas.com erro: {e}")
     if not jobs:
-        print(f"[Collector][Vagas.com] 0 vagas para '{keywords}' — termo pode não ter slug próprio no site (tente algo mais genérico) ou seletor desatualizado.")
+        log_print(f"[Collector][Vagas.com] 0 vagas para '{keywords}' — termo pode não ter slug próprio no site (tente algo mais genérico) ou seletor desatualizado.")
     return jobs
 
 def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
@@ -459,10 +479,14 @@ def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     de rastreamento /listing_ads/... em vez de um link real de vaga /remote-jobs/... — só
     aceitamos cards com link real, senão contamina o resultado com propaganda genérica."""
     jobs = []
+    if _backoff_active("weworkremotely"):
+        return jobs
     url = f"https://weworkremotely.com/remote-jobs/search?term={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("weworkremotely", resp.status_code)
+        elif resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select("li.new-listing-container")
             count = 0
@@ -495,9 +519,9 @@ def fetch_wwr_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 count += 1
                 time.sleep(0.5)
     except Exception as e:
-        print(f"[Collector] We Work Remotely erro: {e}")
+        log_print(f"[Collector] We Work Remotely erro: {e}")
     if not jobs:
-        print(f"[Collector][WeWorkRemotely] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+        log_print(f"[Collector][WeWorkRemotely] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
@@ -508,10 +532,14 @@ def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     filtro por facetas fixas (tipo de contrato, nível, remoto/presencial etc.), sem busca
     textual livre. Esta fonte hoje é "vagas recentes de tech em geral", não por keyword."""
     jobs = []
+    if _backoff_active("programathor"):
+        return jobs
     url = f"https://programathor.com.br/jobs?q={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("programathor", resp.status_code)
+        elif resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             cards = soup.select("div.cell-list")[:limit]
             for card in cards:
@@ -543,9 +571,9 @@ def fetch_programathor_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 })
                 jitter_sleep(0.5, 0.3)
     except Exception as e:
-        print(f"[Collector] Programathor erro: {e}")
+        log_print(f"[Collector] Programathor erro: {e}")
     if not jobs:
-        print(f"[Collector][Programathor] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
+        log_print(f"[Collector][Programathor] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
 # ── Helpers para posts de recrutadores ──
@@ -615,16 +643,16 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
         resp = requests.get(search_url, headers=_headers(), timeout=12)
         if resp.status_code in (999, 429):
             _trip_backoff("linkedin_post", resp.status_code)
-            print(f"[Collector][Posts] LinkedIn rate-limit ({resp.status_code}) — tente com login/Playwright ou aguarde.")
+            log_print(f"[Collector][Posts] LinkedIn rate-limit ({resp.status_code}) — tente com login/Playwright ou aguarde.")
             return jobs
         if resp.status_code != 200:
-            print(f"[Collector][Posts] Busca guest retornou {resp.status_code}")
+            log_print(f"[Collector][Posts] Busca guest retornou {resp.status_code}")
             return jobs
 
         # LinkedIn redireciona busca de conteúdo pra tela de login sem sessão autenticada —
         # sem login real (via Playwright) isso SEMPRE dá 0 posts, não é seletor desatualizado.
         if "/uas/login" in resp.url or "/authwall" in resp.url or "/checkpoint/" in resp.url:
-            print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Faça login pela aba 'IA & Conexões' (abre navegador real, sem precisar digitar senha no app) para usar login real.")
+            log_print("[Collector][Posts] LinkedIn exigiu login (authwall) — busca guest sem sessão não retorna posts. Faça login pela aba 'IA & Conexões' (abre navegador real, sem precisar digitar senha no app) para usar login real.")
             return jobs
 
         soup = BeautifulSoup(resp.text, 'html.parser')
@@ -706,7 +734,7 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
                 })
 
     except Exception as e:
-        print(f"[Collector][Posts] Erro no scraping guest: {e}")
+        log_print(f"[Collector][Posts] Erro no scraping guest: {e}")
     return jobs[:limit]
 
 def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List[Dict]:
@@ -723,7 +751,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
         from playwright.sync_api import sync_playwright
     except ImportError:
         # sem este aviso, o usuário via só "Guest encontrou 0 posts" sem entender o motivo
-        print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
+        log_print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
         return jobs
 
     expanded = f"{keywords} vaga contratando"
@@ -736,7 +764,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
             page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
             page.wait_for_timeout(2000)
             if browser_auth.session_expired("linkedin", page.url):
-                print("[Collector][Posts] Sessão do LinkedIn expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest por enquanto.")
+                log_print("[Collector][Posts] Sessão do LinkedIn expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest por enquanto.")
                 try:
                     from notify import notify_all
                     notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões' para continuar coletando posts de recrutadores.")
@@ -788,9 +816,9 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
         # PyInstaller não empacota — sem esta mensagem, o erro cru do Playwright não deixa
         # claro que o problema é do sistema, não do app.
         if "missing dependencies" in msg.lower() or "libnss" in msg.lower() or "shared libraries" in msg.lower():
-            print("[Collector][Posts] Playwright: Chromium não conseguiu abrir — faltam bibliotecas do sistema operacional (comum no Linux, varia por distro). Rode 'sudo playwright install-deps chromium' (se tiver Python+Playwright instalados) ou instale manualmente libnss3/libatk1.0-0/libgbm1 e afins via seu gerenciador de pacotes. Caindo para busca guest por enquanto.")
+            log_print("[Collector][Posts] Playwright: Chromium não conseguiu abrir — faltam bibliotecas do sistema operacional (comum no Linux, varia por distro). Rode 'sudo playwright install-deps chromium' (se tiver Python+Playwright instalados) ou instale manualmente libnss3/libatk1.0-0/libgbm1 e afins via seu gerenciador de pacotes. Caindo para busca guest por enquanto.")
         else:
-            print(f"[Collector][Posts] Playwright erro: {e}")
+            log_print(f"[Collector][Posts] Playwright erro: {e}")
     return jobs[:limit]
 
 def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]:
@@ -801,15 +829,15 @@ def fetch_linkedin_recruiter_posts(keywords: str, limit: int = 10) -> List[Dict]
     - Filtra por sinais de recrutador + keywords de contratação
     - Expande keywords automaticamente: 'python developer' -> 'python developer vaga contratando hiring'
     """
-    print(f"[Collector][Posts] Buscando posts de recrutadores para '{keywords}'...")
+    log_print(f"[Collector][Posts] Buscando posts de recrutadores para '{keywords}'...")
     # 1. tenta Playwright se tiver sessão salva
     jobs = _fetch_linkedin_posts_via_playwright(keywords, limit=limit)
     if jobs:
-        print(f"[Collector][Posts] Playwright encontrou {len(jobs)} posts")
+        log_print(f"[Collector][Posts] Playwright encontrou {len(jobs)} posts")
         return jobs
     # 2. fallback guest
     jobs = _fetch_linkedin_posts_guest(keywords, limit=limit)
-    print(f"[Collector][Posts] Guest encontrou {len(jobs)} posts")
+    log_print(f"[Collector][Posts] Guest encontrou {len(jobs)} posts")
     return jobs
 
 def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
@@ -823,10 +851,14 @@ def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     (JobPosting) na página de detalhe, mesmo padrão usado em fetch_linkedin_job_details.
     """
     jobs = []
+    if _backoff_active("geekhunter"):
+        return jobs
     url = f"https://www.geekhunter.com/pt/vagas?searchTerm={requests.utils.quote(keywords)}"
     try:
         resp = requests.get(url, headers=_headers(), timeout=10)
-        if resp.status_code == 200:
+        if resp.status_code in (429, 999):
+            _trip_backoff("geekhunter", resp.status_code)
+        elif resp.status_code == 200:
             m = re.search(r'<script id="itemList" type="application/ld\+json">(.*?)</script>', resp.text, re.S)
             item_list = []
             if m:
@@ -874,9 +906,9 @@ def fetch_geekhunter_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                 })
                 jitter_sleep(0.4, 0.3)
     except Exception as e:
-        print(f"[Collector] GeekHunter erro: {e}")
+        log_print(f"[Collector] GeekHunter erro: {e}")
     if not jobs:
-        print(f"[Collector][GeekHunter] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real (site é focado em vagas de tecnologia).")
+        log_print(f"[Collector][GeekHunter] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real (site é focado em vagas de tecnologia).")
     return jobs
 
 def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_per_source: int = 10, enable_linkedin_posts: bool = True, linkedin_posts_limit: int = None, should_stop=None) -> List[Dict]:
@@ -891,9 +923,9 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
 
     for kw in keywords_list:
         if should_stop and should_stop():
-            print("[Collector] Parada solicitada pelo usuário — interrompendo coleta antes da próxima keyword.")
+            log_print("[Collector] Parada solicitada pelo usuário — interrompendo coleta antes da próxima keyword.")
             break
-        print(f"[Collector] Buscando vagas para '{kw}'...")
+        log_print(f"[Collector] Buscando vagas para '{kw}'...")
 
         # Fontes sem backoff/anti-bot próprio rodam em paralelo — tempo total cai de "soma
         # das latências" para "a mais lenta" (LinkedIn fica de fora por precisar do backoff).
@@ -914,7 +946,7 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
                 try:
                     all_jobs.extend(future.result())
                 except Exception as e:
-                    print(f"[Collector][{name}] Erro: {e}")
+                    log_print(f"[Collector][{name}] Erro: {e}")
 
         # LinkedIn (vagas) fica fora do paralelismo por causa do backoff/anti-bot próprio
         linkedin_jobs = fetch_linkedin_jobs(kw, location=location, limit=limit_per_source)
@@ -926,9 +958,9 @@ def collect_all_jobs(keywords_list: List[str], location: str = "Brasil", limit_p
                 posts_jobs = fetch_linkedin_recruiter_posts(kw, limit=linkedin_posts_limit)
                 all_jobs.extend(posts_jobs)
             except Exception as e:
-                print(f"[Collector][Posts] Erro geral: {e}")
+                log_print(f"[Collector][Posts] Erro geral: {e}")
             # pausa extra para evitar rate-limit no LinkedIn
             jitter_sleep(2.0, 0.6)
         
-    print(f"[Collector] Total de vagas coletadas (bruto): {len(all_jobs)}")
+    log_print(f"[Collector] Total de vagas coletadas (bruto): {len(all_jobs)}")
     return all_jobs

@@ -8,11 +8,12 @@ from email.mime.application import MIMEApplication
 from pathlib import Path
 
 from config import Config
+from logutil import log_print
 
 def send_email_application(recipient_email: str, job_title: str, company: str, cover_letter: str, pdf_path: str) -> bool:
     """Envia candidatura via E-mail (SMTP) com o curriculo otimizado em anexo."""
     if not Config.SMTP_USER or not Config.SMTP_PASS:
-        print(f"[Sender SMTP] Credenciais SMTP não configuradas no .env. Ignorando envio por e-mail para {recipient_email}.")
+        log_print(f"[Sender SMTP] Credenciais SMTP não configuradas no .env. Ignorando envio por e-mail para {recipient_email}.")
         return False
         
     try:
@@ -39,10 +40,10 @@ def send_email_application(recipient_email: str, job_title: str, company: str, c
         server.sendmail(Config.SMTP_USER, recipient_email, msg.as_string())
         server.quit()
         
-        print(f"[Sender SMTP] E-mail enviado com sucesso para {recipient_email}!")
+        log_print(f"[Sender SMTP] E-mail enviado com sucesso para {recipient_email}!")
         return True
     except Exception as e:
-        print(f"[Sender SMTP] Erro ao enviar e-mail para {recipient_email}: {e}")
+        log_print(f"[Sender SMTP] Erro ao enviar e-mail para {recipient_email}: {e}")
         return False
 
 def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> bool:
@@ -52,16 +53,16 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("[Sender Gupy] Playwright não está instalado. Execute 'pip install playwright && playwright install'")
+        log_print("[Sender Gupy] Playwright não está instalado. Execute 'pip install playwright && playwright install'")
         return False
     import browser_auth
 
     # modo seguro: delay randômico + aviso anti-ban
     delay = random.uniform(2.5, 5.5)
-    print(f"[Sender Gupy] Iniciando automacao do navegador para a vaga: {job_url} (delay seguro {delay:.1f}s)")
-    print("[Aviso] Modo seguro ativo: ritmo humano, delays randômicos para evitar softban 999/429 (15min-24h). Mantenha limite diário ≤20.")
+    log_print(f"[Sender Gupy] Iniciando automacao do navegador para a vaga: {job_url} (delay seguro {delay:.1f}s)")
+    log_print("[Aviso] Modo seguro ativo: ritmo humano, delays randômicos para evitar softban 999/429 (15min-24h). Mantenha limite diário ≤20.")
     if not browser_auth.has_session("gupy"):
-        print("[Sender Gupy] Sem sessão salva — faça login na aba 'IA & Conexões' pra candidatura preencher automaticamente já logado. Continuando sem login (pode pedir login manual na janela).")
+        log_print("[Sender Gupy] Sem sessão salva — faça login na aba 'IA & Conexões' pra candidatura preencher automaticamente já logado. Continuando sem login (pode pedir login manual na janela).")
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(400,700)))
@@ -69,7 +70,7 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
             page = context.new_page()
             page.goto(job_url, timeout=30000)
             if browser_auth.has_session("gupy") and browser_auth.session_expired("gupy", page.url):
-                print("[Sender Gupy] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
+                log_print("[Sender Gupy] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
                 try:
                     from notify import notify_all
                     notify_all("JobAutoFit — Sessão expirada", "Sua sessão da Gupy expirou. Faça login novamente na aba 'IA & Conexões'.")
@@ -86,16 +87,16 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
             file_input = page.query_selector("input[type='file']")
             if file_input and os.path.exists(pdf_path):
                 file_input.set_input_files(pdf_path)
-                print("[Sender Gupy] Curriculo otimizado em PDF anexado no formulario Gupy.")
+                log_print("[Sender Gupy] Curriculo otimizado em PDF anexado no formulario Gupy.")
                 time.sleep(random.uniform(2.0,4.0))
-            print("[Sender Gupy] Formulario inicial preenchido. Finalizando sessão...")
+            log_print("[Sender Gupy] Formulario inicial preenchido. Finalizando sessão...")
             time.sleep(random.uniform(1.0,2.0))
             browser.close()
             # delay entre vagas
             time.sleep(delay)
             return True
     except Exception as e:
-        print(f"[Sender Gupy] Erro na automacao Gupy: {e}")
+        log_print(f"[Sender Gupy] Erro na automacao Gupy: {e}")
         return False
 
 def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
@@ -106,13 +107,13 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("[Sender LinkedIn] Playwright não instalado.")
+        log_print("[Sender LinkedIn] Playwright não instalado.")
         return False
     import browser_auth
 
     delay = random.uniform(3.0, 6.0)
-    print(f"[Sender LinkedIn] Acessando vaga no LinkedIn: {job_url} (delay seguro {delay:.1f}s)")
-    print("[Aviso] LinkedIn Easy Apply com ritmo humano — limite diário ≤20 evita bloqueio 999/429.")
+    log_print(f"[Sender LinkedIn] Acessando vaga no LinkedIn: {job_url} (delay seguro {delay:.1f}s)")
+    log_print("[Aviso] LinkedIn Easy Apply com ritmo humano — limite diário ≤20 evita bloqueio 999/429.")
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, slow_mo=int(random.uniform(600,900)))
@@ -120,7 +121,7 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
             page = context.new_page()
             page.goto(job_url, timeout=30000)
             if browser_auth.has_session("linkedin") and browser_auth.session_expired("linkedin", page.url):
-                print("[Sender LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
+                log_print("[Sender LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
                 try:
                     from notify import notify_all
                     notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
@@ -131,16 +132,16 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
             if easy_apply_btn:
                 try: easy_apply_btn.hover(); time.sleep(random.uniform(0.7,1.5))
                 except: pass
-                print("[Sender LinkedIn] Botao Easy Apply encontrado! (Se o login for necessário, faça-o no navegador aberto).")
+                log_print("[Sender LinkedIn] Botao Easy Apply encontrado! (Se o login for necessário, faça-o no navegador aberto).")
                 time.sleep(random.uniform(3.0,6.0))
             else:
-                print("[Sender LinkedIn] Vaga redireciona para site externo ou requer login.")
+                log_print("[Sender LinkedIn] Vaga redireciona para site externo ou requer login.")
             time.sleep(random.uniform(1.0,2.5))
             browser.close()
             time.sleep(delay)
             return True
     except Exception as e:
-        print(f"[Sender LinkedIn] Erro no fluxo LinkedIn: {e}")
+        log_print(f"[Sender LinkedIn] Erro no fluxo LinkedIn: {e}")
         return False
 
 def apply_to_job(job: dict, pdf_path: str, cover_letter: str) -> str:
@@ -168,5 +169,5 @@ def apply_to_job(job: dict, pdf_path: str, cover_letter: str) -> str:
         return 'applied' if success else 'prepared'
 
     # 4. Caso genérico -> Material fica pronto para o usuário enviar manualmente com 1 clique
-    print(f"[Sender] Materiais otimizados gerados com sucesso para {job['company']} - {job['title']}.")
+    log_print(f"[Sender] Materiais otimizados gerados com sucesso para {job['company']} - {job['title']}.")
     return 'prepared'
