@@ -78,5 +78,5 @@ def load_search_config():
     if SEARCH_CONFIG_PATH.exists():
         try: return json.loads(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
         except: pass
-    return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"telegram_bot_token":"","telegram_chat_id":"","schedule_enabled":False,"schedule_hour":"08:00","enable_linkedin_posts":True,"linkedin_posts_limit":8,"auto_send":True}
+    return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"enable_linkedin_posts":True,"linkedin_posts_limit":8,"auto_send":True}
 def save_search_config(c): SEARCH_CONFIG_PATH.write_text(json.dumps(c,ensure_ascii=False,indent=2),encoding="utf-8")

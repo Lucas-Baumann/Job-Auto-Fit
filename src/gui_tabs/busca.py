@@ -1,6 +1,5 @@
-import json, os, sys, threading, subprocess, webbrowser, re
+import json, os, sys, threading, subprocess, webbrowser
 from pathlib import Path
-from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import ttkbootstrap as tb
@@ -14,7 +13,7 @@ from gui_common import (
 )
 
 class BuscaTabMixin:
-    """Aba 2 - Busca & Filtros: palavras-chave, filtros avancados, agendamento, Telegram."""
+    """Aba 2 - Busca & Filtros: palavras-chave, filtros avancados, posts de recrutador."""
     def _build_busca(self):
         f=self.tab_busca
         # scroll
@@ -52,6 +51,16 @@ class BuscaTabMixin:
         # aviso dinâmico de ban — sempre visível quando em risco
         self.lbl_ban_warning=tb.Label(inner, text="", font=("Segoe UI", 8, "bold"), bootstyle="danger", wraplength=900, justify=LEFT)
         self.lbl_ban_warning.pack(fill=X, pady=(2,4))
+        # LinkedIn posts de recrutadores — perto do aviso de risco de ban, já que é a fonte
+        # que mais precisa de atenção ao limite (login + Playwright, mais request por vaga)
+        card_posts=tb.Labelframe(inner,text="LinkedIn — Posts de Recrutadores (nova fonte)",padding=10,bootstyle="warning"); card_posts.pack(fill=X,pady=5)
+        row_posts=tb.Frame(card_posts); row_posts.pack(fill=X)
+        tb.Checkbutton(row_posts,text="Buscar também posts de recrutadores no LinkedIn",variable=self.var_enable_linkedin_posts,bootstyle="round-toggle").pack(side=LEFT,padx=5)
+        info_icon(row_posts, "Ativa coleta em posts/feed de recrutadores no LinkedIn (ex: 'Estamos contratando').\nFiltra por sinais de recrutador (Recruiter/RH/Talent) + keywords de vaga.\nSem login usa scraping guest (frágil, pode pegar poucos). Com login + Playwright é mais confiável.\nMonta busca booleana: Python Developer → (\"vaga\" OR \"contratando\" OR \"hiring\" OR ...) AND \"Python Developer\"").pack(side=LEFT)
+        row_posts2=tb.Frame(card_posts); row_posts2.pack(fill=X,pady=4)
+        tb.Label(row_posts2,text="Limite posts/keyword").pack(side=LEFT,padx=5); tb.Spinbox(row_posts2,from_=1,to=20,textvariable=self.var_linkedin_posts_limit,width=6).pack(side=LEFT,padx=5)
+        info_icon(row_posts2, "Limite de posts por keyword.\n>10 sem login (guest) = falha/authwall garantida. Com login + Playwright suporta 10-15.\nCada post = 1 request + 1 detalhe, respeita daily_limit.").pack(side=LEFT)
+        tb.Label(row_posts2,text="Requer PLAYWRIGHT + login para melhor taxa. Delay + daily_limit evitam softban.",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT,padx=10)
         self.frame_presencial=tb.Labelframe(inner,text="Localização Presencial / Híbrido",padding=10,bootstyle="warning"); self.frame_presencial.pack(fill=X,pady=5)
         tb.Label(self.frame_presencial,text="Cidade/Estado ex: São Paulo, SP").pack(anchor=W); tb.Entry(self.frame_presencial,textvariable=self.var_presencial_loc).pack(fill=X,pady=4)
         card2=tb.Labelframe(inner,text="Palavras-chave avançadas",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
@@ -70,26 +79,6 @@ class BuscaTabMixin:
         row_send=tb.Frame(card3); row_send.pack(fill=X,pady=(6,0))
         tb.Checkbutton(row_send,text="Enviar automaticamente quando o match atingir o score mínimo",variable=self.var_auto_send,bootstyle="round-toggle").pack(side=LEFT,padx=5)
         info_icon(row_send, "Desative para revisar antes de enviar: vagas com match suficiente ficam com status 'ready_to_send'\n(PDF + carta já prontos) na aba Histórico, e você aprova o envio manualmente no botão\n'Aprovar e Enviar'. Recomendado se não quiser confiar 100% na IA em candidaturas reais.").pack(side=LEFT)
-        # LinkedIn posts de recrutadores
-        card_posts=tb.Labelframe(inner,text="LinkedIn — Posts de Recrutadores (nova fonte)",padding=10,bootstyle="warning"); card_posts.pack(fill=X,pady=5)
-        row_posts=tb.Frame(card_posts); row_posts.pack(fill=X)
-        tb.Checkbutton(row_posts,text="Buscar também posts de recrutadores no LinkedIn",variable=self.var_enable_linkedin_posts,bootstyle="round-toggle").pack(side=LEFT,padx=5)
-        info_icon(row_posts, "Ativa coleta em posts/feed de recrutadores no LinkedIn (ex: 'Estamos contratando').\nFiltra por sinais de recrutador (Recruiter/RH/Talent) + keywords de vaga.\nSem login usa scraping guest (frágil, pode pegar poucos). Com login + Playwright é mais confiável.\nExpande automaticamente: Python Developer → 'Python Developer vaga contratando hiring'").pack(side=LEFT)
-        row_posts2=tb.Frame(card_posts); row_posts2.pack(fill=X,pady=4)
-        tb.Label(row_posts2,text="Limite posts/keyword").pack(side=LEFT,padx=5); tb.Spinbox(row_posts2,from_=1,to=20,textvariable=self.var_linkedin_posts_limit,width=6).pack(side=LEFT,padx=5)
-        info_icon(row_posts2, "Limite de posts por keyword.\n>10 sem login (guest) = falha/authwall garantida. Com login + Playwright suporta 10-15.\nCada post = 1 request + 1 detalhe, respeita daily_limit.").pack(side=LEFT)
-        tb.Label(row_posts2,text="Requer PLAYWRIGHT + login para melhor taxa. Delay + daily_limit evitam softban.",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT,padx=10)
-        # agendamento
-        card4=tb.Labelframe(inner,text="Agendamento + Notificações",padding=10,bootstyle="secondary"); card4.pack(fill=X,pady=5)
-        tb.Checkbutton(card4,text="Ativar agendamento diário",variable=self.var_schedule_enabled,bootstyle="round-toggle").pack(anchor=W,pady=2)
-        row2=tb.Frame(card4); row2.pack(fill=X,pady=4)
-        tb.Label(row2,text="Horário (HH:MM)").pack(side=LEFT,padx=5); tb.Entry(row2,textvariable=self.var_schedule_hour,width=10).pack(side=LEFT,padx=5)
-        tb.Button(row2,text="Agendar",bootstyle="secondary-outline",command=self.setup_schedule).pack(side=LEFT,padx=5)
-        tb.Label(card4,text="Telegram (opcional): crie bot no @BotFather e informe token + chat_id",font=("Segoe UI",8),bootstyle="light").pack(anchor=W,pady=(6,0))
-        row3=tb.Frame(card4); row3.pack(fill=X,pady=4)
-        tb.Label(row3,text="Bot Token").pack(side=LEFT,padx=5); tb.Entry(row3,textvariable=self.var_telegram_token,width=36,show="*").pack(side=LEFT,padx=5,fill=X,expand=True)
-        tb.Label(row3,text="Chat ID").pack(side=LEFT,padx=5); tb.Entry(row3,textvariable=self.var_telegram_chat,width=16).pack(side=LEFT,padx=5)
-        tb.Button(row3,text="Testar Telegram",bootstyle="info-outline",command=self.test_telegram).pack(side=LEFT,padx=5)
         # hooks para aviso de ban dinâmico
         for v in (self.var_limit, self.var_daily_limit, self.var_linkedin_posts_limit):
             try: v.trace_add("write", lambda *_: self._check_ban_risk())
@@ -136,43 +125,5 @@ class BuscaTabMixin:
         mode=self.var_work_mode.get()
         if mode in ("presencial","hibrido"): self.frame_presencial.pack(fill=X,pady=5)
         else: self.frame_presencial.pack_forget()
-    def setup_schedule(self):
-        if not self.var_schedule_enabled.get(): messagebox.showinfo("Agendamento","Ative a opção primeiro."); return
-        hour=self.var_schedule_hour.get().strip()
-        if not re.match(r"^\d{2}:\d{2}$",hour): messagebox.showwarning("Agendamento","Formato HH:MM ex: 08:00"); return
-        self.save_all(silent=True); messagebox.showinfo("Agendamento",f"Agendamento salvo para {hour} diário.\nDeixe a GUI aberta — ela dispara automaticamente.\nOu use Task Scheduler com: python main.py")
-        # cancela um loop anterior antes de iniciar outro — clicar "Agendar" 2x sem isso criava
-        # duas cadeias de after() independentes rodando em paralelo, e a automação disparava
-        # em dobro no horário certo (duas execuções simultâneas do pipeline).
-        if getattr(self, "_schedule_after_id", None):
-            try: self.after_cancel(self._schedule_after_id)
-            except Exception: pass
-        self._schedule_after_id = None
-        self._schedule_last_fired_date = None
-        self._schedule_loop()
-    def _schedule_loop(self):
-        if not self.var_schedule_enabled.get():
-            self._schedule_after_id = None
-            return
-        now_dt = datetime.now()
-        now = now_dt.strftime("%H:%M")
-        today = now_dt.strftime("%Y-%m-%d")
-        # ">=" em vez de "==": comparação exata perdia o disparo se o tick de 60s atrasasse
-        # (UI ocupada) e pulasse o minuto exato. _schedule_last_fired_date garante que só
-        # dispara 1x por dia mesmo checando ">=" a cada minuto depois do horário.
-        if now >= self.var_schedule_hour.get().strip() and getattr(self, "_schedule_last_fired_date", None) != today:
-            self._schedule_last_fired_date = today
-            self._log(f"[Agendamento] Disparando execução automática às {now}")
-            self.run_automation()
-        self._schedule_after_id = self.after(60000, self._schedule_loop)
-    def test_telegram(self):
-        token=self.var_telegram_token.get().strip(); chat=self.var_telegram_chat.get().strip()
-        if not token or not chat: messagebox.showwarning("Telegram","Informe token e chat_id"); return
-        try:
-            import requests
-            r=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",json={"chat_id":chat,"text":"JobAutoFit: teste OK ✔️"},timeout=8)
-            if r.status_code==200: messagebox.showinfo("Telegram","Mensagem enviada!")
-            else: messagebox.showerror("Telegram",r.text[:400])
-        except Exception as e: messagebox.showerror("Telegram",str(e))
 
     # IA
