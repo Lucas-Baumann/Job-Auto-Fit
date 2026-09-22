@@ -87,6 +87,28 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
         self.after(300, self._maybe_show_onboarding)
+        # sem isso, fechar no X perdia edição não salva sem avisar, e se a automação
+        # estivesse rodando em background (thread + Playwright/subprocess), fechar a janela
+        # matava o processo Python no meio de uma vaga sem chance de interromper com cuidado.
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self):
+        try:
+            running = str(self.btn_stop.cget("state")) == "normal"
+        except Exception:
+            running = False
+        if running:
+            if not messagebox.askyesno("Automação em execução", "A automação ainda está rodando. Fechar agora interrompe o processo no meio da vaga atual.\nContinuar mesmo assim?"):
+                return
+            try: self.stop_automation()
+            except Exception: pass
+        resp = messagebox.askyesnocancel("Fechar JobAutoFit", "Salvar alterações antes de sair?")
+        if resp is None:
+            return
+        if resp:
+            try: self.save_all(silent=True)
+            except Exception: pass
+        self.destroy()
 
     def _maybe_show_onboarding(self):
         # primeira execução (currículo em branco, sem nome nem experiência) — evita a pessoa

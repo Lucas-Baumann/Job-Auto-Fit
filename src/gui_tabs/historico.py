@@ -23,7 +23,7 @@ class HistoricoTabMixin:
         tb.Button(top,text="🗑 Limpar Histórico",bootstyle="danger-outline",command=self.clear_history).pack(side=RIGHT,padx=5)
 
         actions=tb.Frame(f); actions.pack(fill=X,pady=(0,5))
-        tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected).pack(side=LEFT,padx=5)
+        self.btn_approve_send=tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected); self.btn_approve_send.pack(side=LEFT,padx=5)
         info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side=LEFT)
         tb.Button(actions,text="📝 Marcar Outcome",bootstyle="info-outline",command=self.mark_job_outcome).pack(side=LEFT,padx=10)
         info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side=LEFT)
@@ -100,14 +100,29 @@ class HistoricoTabMixin:
             if row["cover_letter_path"] and Path(row["cover_letter_path"]).exists():
                 cover_text=Path(row["cover_letter_path"]).read_text(encoding="utf-8")
         except Exception: pass
-        try:
-            from sender import apply_to_job
-            from db import update_job_status
-            status=apply_to_job(dict(row), row["resume_pdf_path"] or "", cover_text)
-            update_job_status(job_id, status)
-            messagebox.showinfo("Aprovar e Enviar",f"{row['title']} @ {row['company']} → status: {status}")
-            self._refresh_hist(); self._refresh_dashboard()
-        except Exception as e: messagebox.showerror("Aprovar e Enviar",str(e))
+        # apply_to_job dispara SMTP/Playwright (pode levar dezenas de segundos, com delays
+        # propositais anti-softban) — rodar isso direto no callback do botão travava a janela
+        # inteira até terminar. Segue o mesmo padrão de thread+after() já usado em
+        # execucao.py:run_automation pra não travar o mainloop do Tkinter.
+        row_dict=dict(row)
+        self.btn_approve_send.config(state=DISABLED, text="Enviando…")
+        def worker():
+            try:
+                from sender import apply_to_job
+                from db import update_job_status
+                status=apply_to_job(row_dict, row_dict.get("resume_pdf_path") or "", cover_text)
+                update_job_status(job_id, status)
+                def done_ok():
+                    self.btn_approve_send.config(state=NORMAL, text="✔ Aprovar e Enviar (selecionada)")
+                    messagebox.showinfo("Aprovar e Enviar",f"{row_dict['title']} @ {row_dict['company']} → status: {status}")
+                    self._refresh_hist(); self._refresh_dashboard()
+                self.after(0, done_ok)
+            except Exception as e:
+                def done_err():
+                    self.btn_approve_send.config(state=NORMAL, text="✔ Aprovar e Enviar (selecionada)")
+                    messagebox.showerror("Aprovar e Enviar",str(e))
+                self.after(0, done_err)
+        threading.Thread(target=worker, daemon=True).start()
     def mark_job_outcome(self):
         sel=self.tree.selection()
         if not sel: messagebox.showinfo("Outcome","Selecione uma vaga na lista."); return

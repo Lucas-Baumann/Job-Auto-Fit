@@ -85,28 +85,36 @@ def save_job(job_data: dict) -> int:
     job_hash = generate_job_hash(job_data['title'], job_data['company'], job_data.get('url', ''), job_data.get('location', ''))
     if is_job_processed(job_hash):
         return -1
-    
+
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO jobs (
-            job_hash, title, company, location, url, platform, description, contact_email, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        job_hash,
-        job_data['title'],
-        job_data['company'],
-        job_data.get('location', ''),
-        job_data.get('url', ''),
-        job_data.get('platform', 'unknown'),
-        job_data.get('description', ''),
-        job_data.get('contact_email', ''),
-        job_data.get('status', 'pending')
-    ))
-    conn.commit()
-    job_id = cursor.lastrowid
-    conn.close()
-    return job_id
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO jobs (
+                job_hash, title, company, location, url, platform, description, contact_email, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            job_hash,
+            job_data['title'],
+            job_data['company'],
+            job_data.get('location', ''),
+            job_data.get('url', ''),
+            job_data.get('platform', 'unknown'),
+            job_data.get('description', ''),
+            job_data.get('contact_email', ''),
+            job_data.get('status', 'pending')
+        ))
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        # job_hash já existe (UNIQUE) - pode ter sido inserido por outra execução entre o
+        # is_job_processed() acima e este INSERT (ex: agendamento e execução manual
+        # sobrepostos). Sem isso, essa exceção não tratada subia até main.py e derrubava
+        # o pipeline inteiro sem gerar relatório nem notificação.
+        return -1
+    finally:
+        # antes, uma exceção no INSERT pulava o conn.close() e vazava a conexão.
+        conn.close()
 
 def update_job_match(job_id: int, score: int, reason: str, status: str = None):
     conn = get_db_connection()

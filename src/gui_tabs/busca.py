@@ -136,14 +136,30 @@ class BuscaTabMixin:
         hour=self.var_schedule_hour.get().strip()
         if not re.match(r"^\d{2}:\d{2}$",hour): messagebox.showwarning("Agendamento","Formato HH:MM ex: 08:00"); return
         self.save_all(silent=True); messagebox.showinfo("Agendamento",f"Agendamento salvo para {hour} diário.\nDeixe a GUI aberta — ela dispara automaticamente.\nOu use Task Scheduler com: python main.py")
+        # cancela um loop anterior antes de iniciar outro — clicar "Agendar" 2x sem isso criava
+        # duas cadeias de after() independentes rodando em paralelo, e a automação disparava
+        # em dobro no horário certo (duas execuções simultâneas do pipeline).
+        if getattr(self, "_schedule_after_id", None):
+            try: self.after_cancel(self._schedule_after_id)
+            except Exception: pass
+        self._schedule_after_id = None
+        self._schedule_last_fired_date = None
         self._schedule_loop()
     def _schedule_loop(self):
-        if not self.var_schedule_enabled.get(): return
-        now=datetime.now().strftime("%H:%M")
-        if now==self.var_schedule_hour.get().strip():
+        if not self.var_schedule_enabled.get():
+            self._schedule_after_id = None
+            return
+        now_dt = datetime.now()
+        now = now_dt.strftime("%H:%M")
+        today = now_dt.strftime("%Y-%m-%d")
+        # ">=" em vez de "==": comparação exata perdia o disparo se o tick de 60s atrasasse
+        # (UI ocupada) e pulasse o minuto exato. _schedule_last_fired_date garante que só
+        # dispara 1x por dia mesmo checando ">=" a cada minuto depois do horário.
+        if now >= self.var_schedule_hour.get().strip() and getattr(self, "_schedule_last_fired_date", None) != today:
+            self._schedule_last_fired_date = today
             self._log(f"[Agendamento] Disparando execução automática às {now}")
             self.run_automation()
-        self.after(60000, self._schedule_loop)
+        self._schedule_after_id = self.after(60000, self._schedule_loop)
     def test_telegram(self):
         token=self.var_telegram_token.get().strip(); chat=self.var_telegram_chat.get().strip()
         if not token or not chat: messagebox.showwarning("Telegram","Informe token e chat_id"); return
