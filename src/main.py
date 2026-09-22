@@ -4,7 +4,7 @@ from collections import Counter
 
 import json
 from config import Config
-from db import init_db, save_job, update_job_status, update_job_match, get_all_jobs_in_session, get_db_connection
+from db import init_db, save_job, update_job_status, update_job_match, get_all_jobs_in_session, get_db_connection, count_sends_today, log_send_attempt
 from collector import collect_all_jobs
 from ats_optimizer import process_job_ats
 from sender import apply_to_job
@@ -84,22 +84,12 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
             breakdown = ", ".join(f"{motivo} ({qtd})" for motivo, qtd in rejected.most_common())
             log_print(f"[Filtros] Motivos de rejeição: {breakdown}")
 
-    # daily limit — mesma correção do "or" acima: 0 explícito não deve virar o default.
+    # daily_limit agora é só sobre ENVIO de verdade (Playwright/SMTP via apply_to_job) - a
+    # etapa de pontuar/gerar PDF é local (IA + reportlab), não bate em LinkedIn/Gupy, então
+    # não tem risco de softban nenhum e não é mais limitada por dia. Ver count_sends_today()/
+    # log_send_attempt() em db.py e a checagem logo antes de cada apply_to_job() abaixo.
     _raw_daily_limit = filter_cfg.get("daily_limit", Config.DAILY_LIMIT)
     daily_limit = int(_raw_daily_limit) if _raw_daily_limit is not None else Config.DAILY_LIMIT
-    # contar já processados hoje (inclui ready_to_send: já consumiram cota de geração/IA hoje)
-    try:
-        con = get_db_connection()
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM jobs WHERE date(created_at)=date('now') AND status IN ('applied','prepared','ready_to_send')")
-        today_count = cur.fetchone()[0]
-        con.close()
-    except Exception:
-        today_count = 0
-    remaining = max(0, daily_limit - today_count)
-    if remaining == 0 and daily_limit > 0:
-        log_print(f"[Limite] Limite diário de {daily_limit} atingido. Nenhuma vaga será processada hoje.")
-        raw_jobs = []
 
     saved_jobs = []
     new_jobs_count = 0
@@ -108,16 +98,13 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
         if _stop_requested():
             log_print("[Main] Parada solicitada pelo usuário — interrompendo salvamento das vagas coletadas.")
             break
-        if len(saved_jobs) >= remaining and daily_limit > 0:
-            log_print(f"[Limite] Interrompendo após {remaining} vagas (limite diário).")
-            break
         job_id = save_job(j)
         if job_id != -1:  # Nova vaga (não duplicada)
             j['id'] = job_id
             saved_jobs.append(j)
             new_jobs_count += 1
 
-    log_print(f"\n[Main] Novas vagas salvas para processamento nesta rodada: {new_jobs_count} (restante do limite: {remaining})")
+    log_print(f"\n[Main] Novas vagas salvas para processamento nesta rodada: {new_jobs_count}")
 
     if not saved_jobs:
         log_print("[Main] Nenhuma nova vaga inédita encontrada nesta rodada.")
@@ -155,9 +142,15 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
                 elif not auto_send:
                     log_print("   -> Match aceito! Envio automático desativado — aguardando aprovação manual (aba Histórico).")
                     status = 'ready_to_send'
+                elif daily_limit > 0 and count_sends_today() >= daily_limit:
+                    # limite diário de ENVIOS reais atingido - a vaga não fica perdida, só cai
+                    # na mesma fila de revisão manual do modo "envio automático desativado".
+                    log_print(f"   -> Match aceito! Limite diário de envios ({daily_limit}) já atingido — indo para 'ready_to_send' (aprovação manual na aba Histórico).")
+                    status = 'ready_to_send'
                 else:
                     log_print("   -> Match aceito! Disparando envio/automação...")
                     status = apply_to_job(job, pdf_path, cover_text)
+                    log_send_attempt(job['id'])
 
                 update_job_status(job['id'], status, resume_path=pdf_path, cover_path=cover_path)
                 job['status'] = status

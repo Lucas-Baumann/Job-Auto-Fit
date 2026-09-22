@@ -54,8 +54,40 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Registra toda vez que apply_to_job() de fato roda (Playwright/SMTP) - diferente de
+    # status='prepared', que também acontece em dry-run ou quando a vaga só fica com o
+    # material pronto pro usuário aplicar manualmente (zero ação de rede, zero risco de
+    # softban). O status sozinho não distingue esses casos; esta tabela sim - é a partir dela
+    # que o limite diário de ENVIOS de verdade é contado (ver count_sends_today).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS send_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
+
+def log_send_attempt(job_id: int):
+    """Chame logo após apply_to_job() ser executado de verdade (auto_send ou aprovação manual
+    no Histórico) - é o que conta pro limite diário de envios, não o status resultante."""
+    conn = get_db_connection()
+    try:
+        conn.execute("INSERT INTO send_log (job_id) VALUES (?)", (job_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def count_sends_today() -> int:
+    """Quantos apply_to_job() reais já rodaram hoje (UTC, mesma base de created_at) -
+    independente de quantas vagas foram só pontuadas/preparadas sem nenhuma ação de rede."""
+    conn = get_db_connection()
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM send_log WHERE date(sent_at)=date('now')")
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
 
 def _normalize_for_hash(s: str) -> str:
     """Minúsculo, sem acento, sem espaço duplicado — pra 'São Paulo - SP' e 'sao paulo-sp'

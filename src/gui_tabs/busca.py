@@ -46,7 +46,7 @@ class BuscaTabMixin:
         info_icon(grid, "Extrai R$ do texto da vaga. Se não achar salário, não filtra.").grid(row=2,column=0,sticky=E,padx=(110,0))
         tb.Label(grid,text="Idade max vaga (dias, 0=ignorar)").grid(row=2,column=2,sticky=W,padx=5,pady=4); tb.Spinbox(grid,from_=0,to=60,textvariable=self.var_max_age,width=16).grid(row=2,column=3,sticky=W,padx=5,pady=4)
         tb.Label(grid,text="Limite diário envios").grid(row=3,column=0,sticky=W,padx=5,pady=4); tb.Spinbox(grid,from_=1,to=100,textvariable=self.var_daily_limit,width=16).grid(row=3,column=1,sticky=W,padx=5,pady=4)
-        info_icon(grid, "Máximo de vagas processadas por dia.\n>30 = alto risco de softban no LinkedIn (erro 999/429, IP bloqueado 15min-24h).\nRecomendado: 15-20.").grid(row=3,column=0,sticky=E,padx=(120,0))
+        info_icon(grid, "Máximo de CANDIDATURAS ENVIADAS de verdade por dia (automático ou aprovado manualmente no Histórico) — não limita quantas vagas são buscadas/pontuadas, só o disparo real de Playwright/SMTP.\n>30 = alto risco de softban no LinkedIn (erro 999/429, IP bloqueado 15min-24h).\nRecomendado: 15-20.").grid(row=3,column=0,sticky=E,padx=(120,0))
         tb.Checkbutton(grid,text="Apenas vagas PCD",variable=self.var_only_pcd,bootstyle="round-toggle").grid(row=3,column=2,sticky=W,padx=5,pady=4)
         info_icon(grid, "Só passa vaga com 'PCD'/'pessoa com deficiência' no texto").grid(row=3,column=2,sticky=E,padx=(130,0))
         # aviso dinâmico de ban — sempre visível quando em risco

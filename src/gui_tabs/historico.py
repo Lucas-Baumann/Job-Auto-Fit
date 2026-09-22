@@ -95,6 +95,19 @@ class HistoricoTabMixin:
         if not row: messagebox.showwarning("Aprovar e Enviar","Vaga não encontrada."); return
         if row["status"]!="ready_to_send":
             messagebox.showinfo("Aprovar e Enviar",f"Status atual: '{row['status']}'.\nSó é possível aprovar vagas com status 'ready_to_send' (aguardando revisão)."); return
+        # mesmo limite diário de ENVIOS reais que o pipeline automático respeita (main.py) -
+        # o risco de softban vem da ação de automação em si (Playwright/SMTP), não de quem
+        # clicou o botão, então avisa e deixa a pessoa decidir se quer estourar o limite.
+        try:
+            from db import count_sends_today
+            from config import Config
+            _daily_limit = int(self.search_cfg.get("daily_limit", Config.DAILY_LIMIT) or Config.DAILY_LIMIT)
+            _sent_today = count_sends_today()
+            if _daily_limit > 0 and _sent_today >= _daily_limit:
+                if not messagebox.askyesno("Limite diário de envios", f"Você já enviou {_sent_today} candidatura(s) hoje (limite configurado: {_daily_limit}).\nEnviar esta mesmo assim?"):
+                    return
+        except Exception:
+            pass
         cover_text=""
         try:
             if row["cover_letter_path"] and Path(row["cover_letter_path"]).exists():
@@ -109,8 +122,9 @@ class HistoricoTabMixin:
         def worker():
             try:
                 from sender import apply_to_job
-                from db import update_job_status
+                from db import update_job_status, log_send_attempt
                 status=apply_to_job(row_dict, row_dict.get("resume_pdf_path") or "", cover_text)
+                log_send_attempt(job_id)
                 update_job_status(job_id, status)
                 def done_ok():
                     self.btn_approve_send.config(state=NORMAL, text="✔ Aprovar e Enviar (selecionada)")
