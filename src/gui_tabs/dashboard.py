@@ -3,10 +3,10 @@ from pathlib import Path
 from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
@@ -14,19 +14,50 @@ from gui_common import (
 )
 
 class DashboardTabMixin:
-    """Aba 5 - Dashboard: metricas agregadas das candidaturas."""
+    """Aba 5 - Dashboard: metricas agregadas das candidaturas.
+
+    Primeira aba convertida pro visual novo (CustomTkinter: cards com canto arredondado,
+    ver blueprint_vamp_hunter.md) - as outras 6 abas ainda usam ttkbootstrap (conversão
+    aba por aba, não tudo de uma vez). CTkFrame funciona embutido dentro do tb.Frame que
+    gui.py cria pra cada aba (self.tab_dash) sem problema - testado na prática aqui."""
     def _build_dash(self):
         f=self.tab_dash
-        top=tb.Frame(f); top.pack(fill=X,pady=5)
-        tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_dashboard).pack(side=RIGHT)
-        self.dash_cards=tb.Frame(f); self.dash_cards.pack(fill=X,pady=5)
-        # cards serão labels
-        self.lbl_total=tb.Label(self.dash_cards,text="0 vagas",font=("Segoe UI",14,"bold"),bootstyle="primary"); self.lbl_total.pack(side=LEFT,padx=10)
-        self.lbl_high=tb.Label(self.dash_cards,text="0 high match",font=("Segoe UI",12),bootstyle="success"); self.lbl_high.pack(side=LEFT,padx=10)
-        self.lbl_today=tb.Label(self.dash_cards,text="0 hoje",font=("Segoe UI",12),bootstyle="info"); self.lbl_today.pack(side=LEFT,padx=10)
-        # bars por status
-        self.frame_bars=tb.Labelframe(f,text="Distribuição por status / plataforma",padding=10); self.frame_bars.pack(fill=BOTH,expand=True,pady=5)
-        self.bars_text=tk.Text(self.frame_bars,height=12,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9)); self.bars_text.pack(fill=BOTH,expand=True)
+        t=get_active_theme()
+
+        top=ctk.CTkFrame(f, fg_color="transparent")
+        top.pack(fill="x", pady=(0,10))
+        # ação secundária -> estilo outline (neutro), nao herda a cor de destaque - só ação
+        # principal da tela (nenhuma aqui) usaria fg_color=t["primary"] cheio
+        ctk.CTkButton(top, text="Atualizar", command=self._refresh_dashboard,
+                      fg_color="transparent", border_width=1, border_color=t["border"],
+                      text_color=t["text"], hover_color=t["card_bg"], corner_radius=8).pack(side="right")
+
+        # cards de estatística (stat tiles) lado a lado
+        self.dash_cards=ctk.CTkFrame(f, fg_color="transparent")
+        self.dash_cards.pack(fill="x", pady=(0,10))
+        self.lbl_total=self._stat_tile(self.dash_cards, "0", "vagas totais", t["primary"])
+        self.lbl_high=self._stat_tile(self.dash_cards, "0", "match ≥60%", t["success"])
+        self.lbl_today=self._stat_tile(self.dash_cards, "0", "hoje", t["text"])
+
+        # distribuição por status/plataforma
+        self.frame_bars=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        self.frame_bars.pack(fill="both", expand=True)
+        ctk.CTkLabel(self.frame_bars, text="Distribuição por status / plataforma", text_color=t["text"], anchor="w",
+                     font=ctk.CTkFont(weight="bold")).pack(fill="x", padx=16, pady=(14,4))
+        self.bars_text=tk.Text(self.frame_bars, height=12, bg=t["card_bg"], fg=t["text"], font=("Consolas",9),
+                                borderwidth=0, highlightthickness=0)
+        self.bars_text.pack(fill="both", expand=True, padx=16, pady=(0,16))
+
+    def _stat_tile(self, parent, value, label, accent_color):
+        """Um card pequeno (número grande + legenda) - unidade repetida 3x no dashboard."""
+        t=get_active_theme()
+        tile=ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        tile.pack(side="left", fill="x", expand=True, padx=(0,10))
+        lbl_value=ctk.CTkLabel(tile, text=value, text_color=accent_color, font=ctk.CTkFont(size=22, weight="bold"))
+        lbl_value.pack(anchor="w", padx=16, pady=(12,0))
+        ctk.CTkLabel(tile, text=label, text_color=t["text_dim"]).pack(anchor="w", padx=16, pady=(0,12))
+        return lbl_value
+
     def _refresh_dashboard(self):
         try:
             if not DB_PATH.exists(): return
@@ -35,7 +66,7 @@ class DashboardTabMixin:
             cur.execute("SELECT COUNT(*) c FROM jobs"); total=cur.fetchone()["c"]
             cur.execute("SELECT COUNT(*) c FROM jobs WHERE match_score>=60"); high=cur.fetchone()["c"]
             cur.execute("SELECT COUNT(*) c FROM jobs WHERE date(created_at)=date('now')"); today=cur.fetchone()["c"]
-            self.lbl_total.config(text=f"{total} vagas totais"); self.lbl_high.config(text=f"{high} match≥60%"); self.lbl_today.config(text=f"{today} hoje")
+            self.lbl_total.configure(text=str(total)); self.lbl_high.configure(text=str(high)); self.lbl_today.configure(text=str(today))
             cur.execute("SELECT status, COUNT(*) c FROM jobs GROUP BY status"); rows=cur.fetchall()
             cur.execute("SELECT platform, COUNT(*) c FROM jobs GROUP BY platform"); rows2=cur.fetchall()
             cur.execute("SELECT outcome, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows3=cur.fetchall()

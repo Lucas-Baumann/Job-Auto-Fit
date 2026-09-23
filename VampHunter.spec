@@ -17,6 +17,11 @@ hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil'
 
 tmp = collect_all('ttkbootstrap')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
+# migração de tela em andamento (ver blueprint_vamp_hunter.md): abas convertidas usam
+# CustomTkinter (cantos arredondados), as que ainda não foram convertidas seguem no
+# ttkbootstrap acima - os dois convivem no mesmo app até a migração terminar.
+tmp = collect_all('customtkinter')
+datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 tmp = collect_all('reportlab')
 datas += list(tmp[0]); binaries += list(tmp[1]); hiddenimports += list(tmp[2])
 # Inclui o driver do Playwright E o Chromium baixado (o build roda 'playwright install

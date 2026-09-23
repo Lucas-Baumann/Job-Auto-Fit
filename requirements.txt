@@ -6,6 +6,7 @@ reportlab>=4.1.0
 playwright>=1.42.0
 python-dotenv>=1.0.1
 ttkbootstrap>=2.2.0
+customtkinter>=6.0.0
 plyer>=2.1.0
 pypdf>=6.0.0
 pyinstaller>=6.0.0

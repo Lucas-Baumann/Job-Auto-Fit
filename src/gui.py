@@ -29,7 +29,10 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         # barra de título) é o morcego, um ícone separado só pra isso, mais simples e legível
         # em tamanho pequeno.
         try:
-            self.iconbitmap(str(resource_path("icon_taskbar.ico")))
+            # default= (não só o bitmap posicional) propaga o ícone pras janelas
+            # "implícitas" tipo messagebox.showinfo/askyesno - sem isso, elas ficam com a
+            # penazinha padrão do Tk mesmo com a janela principal certa.
+            self.iconbitmap(default=str(resource_path("icon_taskbar.ico")))
         except Exception:
             pass
         self.geometry("1280x820"); self.minsize(1200,750)
