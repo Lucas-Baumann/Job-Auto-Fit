@@ -23,7 +23,7 @@ from gui_tabs.perfil_github import PerfilGithubTabMixin
 class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin, DashboardTabMixin, HistoricoTabMixin, PerfilGithubTabMixin):
     def __init__(self):
         super().__init__(themename="darkly")
-        self.title("JobAutoFit — Automação Completa (Gupy / LinkedIn / ATS)")
+        self.title("VampHunter — Automação Completa (Gupy / LinkedIn / ATS)")
         self.geometry("1280x820"); self.minsize(1200,750)
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
         try:
@@ -97,7 +97,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
                 return
             try: self.stop_automation()
             except Exception: pass
-        resp = messagebox.askyesnocancel("Fechar JobAutoFit", "Salvar alterações antes de sair?")
+        resp = messagebox.askyesnocancel("Fechar VampHunter", "Salvar alterações antes de sair?")
         if resp is None:
             return
         if resp:
@@ -112,7 +112,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         if pi.get("name") or self.curriculum.get("experiences"):
             return
         messagebox.showinfo(
-            "Bem-vindo ao JobAutoFit",
+            "Bem-vindo ao VampHunter",
             "Primeira execução — nenhum currículo carregado ainda.\n\n"
             "Passo a passo sugerido:\n"
             "1) Aba 3 (IA & Conexões) — configure uma chave de IA (Gemini/OpenRouter grátis ou Ollama local). "
@@ -123,7 +123,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
 
     def _build_ui(self):
         top=tb.Frame(self,padding=10); top.pack(fill=X)
-        tb.Label(top,text="JobAutoFit",font=("Segoe UI",18,"bold"),bootstyle="primary").pack(side=LEFT)
+        tb.Label(top,text="VampHunter",font=("Segoe UI",18,"bold"),bootstyle="primary").pack(side=LEFT)
         tb.Label(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",font=("Segoe UI",10),bootstyle="light").pack(side=LEFT,padx=10)
         tb.Button(top,text="Exportar",bootstyle="secondary-outline",command=self.export_config).pack(side=RIGHT,padx=5)
         tb.Button(top,text="Importar",bootstyle="secondary-outline",command=self.import_config).pack(side=RIGHT,padx=5)

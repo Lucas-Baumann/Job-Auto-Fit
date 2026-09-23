@@ -73,7 +73,7 @@ def apply_gupy_playwright(job_url: str, pdf_path: str, cover_letter: str) -> boo
                 log_print("[Sender Gupy] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
                 try:
                     from notify import notify_all
-                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão da Gupy expirou. Faça login novamente na aba 'IA & Conexões'.")
+                    notify_all("VampHunter — Sessão expirada", "Sua sessão da Gupy expirou. Faça login novamente na aba 'IA & Conexões'.")
                 except Exception:
                     pass
             time.sleep(random.uniform(2.0, 4.0))
@@ -124,7 +124,7 @@ def apply_linkedin_playwright(job_url: str, pdf_path: str) -> bool:
                 log_print("[Sender LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'.")
                 try:
                     from notify import notify_all
-                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
+                    notify_all("VampHunter — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
                 except Exception:
                     pass
             time.sleep(random.uniform(2.0,4.5))

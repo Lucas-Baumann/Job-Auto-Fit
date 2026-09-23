@@ -336,7 +336,7 @@ REPO_TEMPLATE = """# {repo_name}
 {sub_extra}
 
 ---
-<sub>Gerado por JobAutoFit — estética dark tokyonight + shields + análise do README antigo + currículo</sub>
+<sub>Gerado por VampHunter — estética dark tokyonight + shields + análise do README antigo + currículo</sub>
 """
 
 def fetch_repo_readme(username: str, repo: str) -> str:
@@ -513,7 +513,7 @@ def push_profile_readme(username: str, token: str, markdown: str, workflow: str 
     extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)} if workflow is None else {}
     # workflow já está em SNAKE_WORKFLOW, sempre inclui
     extra = {".github/workflows/snake.yml": SNAKE_WORKFLOW.format(username=username)}
-    return _git_push_file(username, username, token, markdown, "README.md", "docs: atualiza README perfil via JobAutoFit", extra_files=extra, author_name=author_name, author_email=author_email)
+    return _git_push_file(username, username, token, markdown, "README.md", "docs: atualiza README perfil via VampHunter", extra_files=extra, author_name=author_name, author_email=author_email)
 
 def push_repo_readme(username: str, repo: str, token: str, markdown: str, author_name: str = None, author_email: str = None) -> str:
-    return _git_push_file(username, repo, token, markdown, "README.md", f"docs: atualiza README via JobAutoFit — {repo}", author_name=author_name, author_email=author_email)
+    return _git_push_file(username, repo, token, markdown, "README.md", f"docs: atualiza README via VampHunter — {repo}", author_name=author_name, author_email=author_email)

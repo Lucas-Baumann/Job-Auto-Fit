@@ -55,18 +55,6 @@ HIRING_KEYWORDS = [
     "job opening", "job opportunity", "apply now", "#vaga", "#vagas", "#hiring", "#oportunidade"
 ]
 
-# Testei ao vivo (conta logada, colando query direto na busca do LinkedIn) três formatos de
-# busca booleana combinando o grupo de termos de contratação (OR) com a keyword da vaga (AND):
-# sem parênteses, e com parênteses agrupando o OR - nenhum dos dois voltou resultado correto
-# (sem parênteses o AND "vaza" e filtra errado; com parênteses o cruzamento deu 0 resultados,
-# mesmo existindo post que bate nos dois critérios separadamente). O buscador de conteúdo do
-# LinkedIn simplesmente não trata AND/OR combinados de forma confiável - só um AND puro entre
-# dois termos (ex: "hiring" AND "Desenvolvedor Mobile") funcionou nos testes. Por isso a busca
-# nem tenta mais boolear o sinal de contratação: manda só a keyword da vaga (frase exata, entre
-# aspas - formato mais básico e confiável) e deixa o corte por "isso parece post de vaga mesmo"
-# inteiro por conta de _has_hiring_keyword(), que já roda em cima do texto de cada post
-# baixado, sem depender de o LinkedIn interpretar boolean nenhum.
-
 def _linkedin_posts_search_url(keywords: str, extra_params: dict = None) -> str:
     """Monta a URL de busca de posts do LinkedIn: /search/results/content/ já restringe o tipo
     de resultado a Posts (publicações) - diferente de /search/results/people/, /jobs/ ou
@@ -167,7 +155,7 @@ def _fetch_linkedin_jobs_authenticated(keywords: str, location: str = "Brasil", 
                 log_print("[Collector][LinkedIn] Sessão salva expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest.")
                 try:
                     from notify import notify_all
-                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
+                    notify_all("VampHunter — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões'.")
                 except Exception:
                     pass
                 browser.close()
@@ -822,7 +810,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
                 log_print("[Collector][Posts] Sessão do LinkedIn expirou — faça login novamente na aba 'IA & Conexões'. Caindo para busca guest por enquanto.")
                 try:
                     from notify import notify_all
-                    notify_all("JobAutoFit — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões' para continuar coletando posts de recrutadores.")
+                    notify_all("VampHunter — Sessão expirada", "Sua sessão do LinkedIn expirou. Faça login novamente na aba 'IA & Conexões' para continuar coletando posts de recrutadores.")
                 except Exception:
                     pass
                 browser.close()

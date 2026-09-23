@@ -29,7 +29,7 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
         except Exception:
             return False
     log_print("=" * 65)
-    log_print("[+] INICIANDO AUTOMATIZADOR DE CURRICULOS & VAGAS (JobAutoFit)")
+    log_print("[+] INICIANDO AUTOMATIZADOR DE CURRICULOS & VAGAS (VampHunter)")
     log_print("=" * 65)
     log_print(f"[*] Palavras-chave: {keywords}")
     log_print(f"[*] Localização: {location}")
@@ -195,7 +195,7 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     # notificação
     try:
         high = sum(1 for j in report_jobs if j.get("match_score", 0) >= 80)
-        notify_all("JobAutoFit concluído", f"{len(report_jobs)} vagas analisadas, {high} com match >=80%. Relatório: {html_report_path.name}")
+        notify_all("VampHunter concluído", f"{len(report_jobs)} vagas analisadas, {high} com match >=80%. Relatório: {html_report_path.name}")
     except Exception:
         pass
 
@@ -203,7 +203,7 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
 
 
 def main():
-    parser = argparse.ArgumentParser(description="JobAutoFit - Automação Inteligente de Candidaturas e ATS")
+    parser = argparse.ArgumentParser(description="VampHunter - Automação Inteligente de Candidaturas e ATS")
     parser.add_argument("--keywords", nargs="+", default=Config.TARGET_KEYWORDS, help="Palavras-chave das vagas (ex: Python Developer)")
     parser.add_argument("--location", default=Config.TARGET_LOCATION, help="Localização desejada (ex: Brasil, Remoto)")
     parser.add_argument("--min-score", type=int, default=Config.MIN_MATCH_SCORE, help="Porcentagem mínima de match ATS para candidatar-se")

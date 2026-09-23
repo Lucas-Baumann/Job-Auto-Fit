@@ -1,8 +1,8 @@
-# 🚀 JobAutoFit - Automação Inteligente de Candidaturas e Otimização ATS (100% Gratuito)
+# 🚀 VampHunter - Automação Inteligente de Candidaturas e Otimização ATS (100% Gratuito)
 
 [![Build & Release](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml/badge.svg)](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml)
 
-O **JobAutoFit** é uma solução completa em Python (GUI + CLI) criada para automatizar a busca de vagas (LinkedIn, Gupy e APIs abertas), otimizar seu currículo para passar pelos filtros automáticos (ATS) utilizando IA gratuita, realizar o envio de candidaturas e acompanhar o resultado de cada uma.
+O **VampHunter** é uma solução completa em Python (GUI + CLI) criada para automatizar a busca de vagas (LinkedIn, Gupy e APIs abertas), otimizar seu currículo para passar pelos filtros automáticos (ATS) utilizando IA gratuita, realizar o envio de candidaturas e acompanhar o resultado de cada uma.
 
 ---
 
@@ -10,8 +10,8 @@ O **JobAutoFit** é uma solução completa em Python (GUI + CLI) criada para aut
 
 Baixe o executável pronto para o seu sistema na página de [**Releases**](https://github.com/Lucas-Baumann/Job-Auto-Fit/releases/latest):
 
-* **Windows** → `JobAutoFit_v2-windows.exe`
-* **Linux** → `JobAutoFit_v2-linux` (dê `chmod +x` antes de executar)
+* **Windows** → `VampHunter-windows.exe`
+* **Linux** → `VampHunter-linux` (dê `chmod +x` antes de executar)
 
 Depois de baixar, veja a seção **"🛠️ Configuração"** mais abaixo — o executável lê `.env` e `curriculum_base.json` na mesma pasta onde ele estiver, e começa em branco se não encontrar nenhum dos dois.
 
@@ -32,7 +32,7 @@ Depois de baixar, veja a seção **"🛠️ Configuração"** mais abaixo — o 
 
 ## 🖥️ Usando pela Interface Gráfica (recomendado)
 
-Abra `JobAutoFit_v2.exe` / `./JobAutoFit_v2-linux`, ou rode `python gui.py` a partir do código-fonte. A janela tem 7 abas:
+Abra `VampHunter.exe` / `./VampHunter-linux`, ou rode `python gui.py` a partir do código-fonte. A janela tem 7 abas:
 
 | Aba | Para que serve |
 |---|---|
@@ -93,7 +93,7 @@ Preencha pela GUI (aba 3) ou editando o arquivo diretamente. Referência complet
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | Envio de candidaturas por e-mail — **ver nota abaixo** |
 | `GITHUB_TOKEN` | Token *classic* do GitHub, escopo `repo` — necessário só para a aba **Perfil GitHub** publicar direto |
 
-> **Login no LinkedIn/Gupy:** não é feito por variável no `.env` — clique em "Fazer login" na aba 3 (**IA & Conexões**). Isso abre um navegador real na página de login do site; você loga do jeito que quiser (senha, "Continuar com Google", 2FA) e o app nunca vê nem guarda sua senha — só salva a sessão localmente (`%LOCALAPPDATA%\JobAutoFit\linkedin_session.json` / `gupy_session.json`). Se a sessão expirar, o app avisa (notificação desktop) e é só clicar em "Fazer login" de novo.
+> **Login no LinkedIn/Gupy:** não é feito por variável no `.env` — clique em "Fazer login" na aba 3 (**IA & Conexões**). Isso abre um navegador real na página de login do site; você loga do jeito que quiser (senha, "Continuar com Google", 2FA) e o app nunca vê nem guarda sua senha — só salva a sessão localmente (`%LOCALAPPDATA%\VampHunter\linkedin_session.json` / `gupy_session.json`). Se a sessão expirar, o app avisa (notificação desktop) e é só clicar em "Fazer login" de novo.
 
 > **SMTP com Gmail:** `SMTP_PASS` não é sua senha normal — o Google bloqueia login direto de app assim. Gere uma **Senha de App** em `myaccount.google.com` → Segurança → Verificação em duas etapas → Senhas de app, e use essa senha de 16 caracteres aqui. Sem isso configurado, o app ainda funciona normalmente (só o envio por e-mail fica desativado).
 >
@@ -157,7 +157,7 @@ Os binários oficiais (Windows + Linux) são gerados automaticamente pelo GitHub
 
 ```bash
 pip install pyinstaller
-pyinstaller JobAutoFit.spec --noconfirm
+pyinstaller VampHunter.spec --noconfirm
 ```
 
 O binário sai em `dist/`. **Importante:** `curriculum_base.json` nunca entra no build (nem no `.spec` nem no `build_exe.ps1`) — dados pessoais reais nunca ficam gravados dentro do binário distribuído.
@@ -192,7 +192,7 @@ job_auto_fit/
 │   ├── db.py                     # SQLite (jobs.db) — histórico, cache, resultado
 │   └── config.py                 # .env + resolução de paths (dev vs. .exe empacotado)
 ├── tests/validar_projeto.py     # suíte de validação de ponta a ponta
-├── JobAutoFit.spec               # build oficial do executável (PyInstaller)
+├── VampHunter.spec               # build oficial do executável (PyInstaller)
 └── .github/workflows/build.yml  # CI: build Windows + Linux e release automática por tag
 ```
 

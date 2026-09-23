@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validação automática do JobAutoFit — rode com: python validar_projeto.py"""
+"""Validação automática do VampHunter — rode com: python validar_projeto.py"""
 import sys, pathlib, subprocess, os, time
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
@@ -28,7 +28,7 @@ def fail(name, msg):
     print(f"  [FAIL] {name}: {msg}")
 
 print("="*60)
-print("VALIDADOR AUTOMÁTICO — JobAutoFit")
+print("VALIDADOR AUTOMÁTICO — VampHunter")
 print("="*60)
 
 # 1. Config
@@ -139,7 +139,7 @@ except Exception as e:
 
 # 12. .exe
 try:
-    exe = BASE/"dist"/"JobAutoFit_v2.exe"
+    exe = BASE/"dist"/"VampHunter.exe"
     ok("EXE", f"{exe.name} ({exe.stat().st_size} bytes) -> {exe.exists()}")
 except: pass
 

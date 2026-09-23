@@ -15,7 +15,7 @@ def geocode(city_state: str) -> Optional[Tuple[float,float]]:
     try:
         url = "https://nominatim.openstreetmap.org/search"
         params = {"q": city_state, "format": "json", "limit": 1, "countrycodes": "br", "addressdetails": 0}
-        headers = {"User-Agent": "JobAutoFit/1.0 (contato: jobautofit@local)"}
+        headers = {"User-Agent": "VampHunter/1.0 (contato: vamphunter@local)"}
         r = requests.get(url, params=params, headers=headers, timeout=8)
         if r.status_code == 200 and r.json():
             data = r.json()[0]

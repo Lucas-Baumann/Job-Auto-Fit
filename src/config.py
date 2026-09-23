@@ -44,22 +44,35 @@ if is_frozen:
     except Exception:
         _legacy_dir = Path.cwd()
 
-    # Dados do usuário agora ficam em %LOCALAPPDATA%\JobAutoFit, fora da pasta do .exe
-    BASE_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "JobAutoFit"
+    # Dados do usuário ficam em %LOCALAPPDATA%\VampHunter, fora da pasta do .exe
+    BASE_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "VampHunter"
     BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Migração única: versões anteriores gravavam tudo do lado do .exe — move pra pasta nova
-    # em vez de deixar o usuário achando que perdeu currículo/chaves/histórico.
-    if not _is_dev_build and _legacy_dir != BASE_DIR:
-        for _name in (".env", "curriculum_base.json", "jobs.db", "jobs.db-wal", "jobs.db-shm",
+    _DATA_ENTRIES = (".env", "curriculum_base.json", "jobs.db", "jobs.db-wal", "jobs.db-shm",
                       "search_config.json", "github_selection.json", "presets.json", ".wizard_done",
-                      "output", "reports", "output_github", "output_github_test", "logs"):
-            _src, _dst = _legacy_dir / _name, BASE_DIR / _name
+                      "linkedin_session.json", "gupy_session.json",
+                      "output", "reports", "output_github", "output_github_test", "logs")
+
+    def _migrate_data_from(_src_dir: Path):
+        if _src_dir == BASE_DIR or not _src_dir.exists():
+            return
+        for _name in _DATA_ENTRIES:
+            _src, _dst = _src_dir / _name, BASE_DIR / _name
             if _src.exists() and not _dst.exists():
                 try:
                     shutil.move(str(_src), str(_dst))
                 except Exception:
                     pass
+
+    # Migração do rebrand JobAutoFit -> VampHunter: quem já usava a versão anterior tem tudo
+    # (currículo, banco, sessão do LinkedIn/Gupy já logada) na pasta com o nome antigo -
+    # sem isto, pareceria que o app "esqueceu" tudo só por causa da troca de nome.
+    _migrate_data_from(Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "JobAutoFit")
+
+    # Migração histórica (instalações bem antigas): versões anteriores ao LOCALAPPDATA
+    # gravavam tudo do lado do .exe — mesmo tratamento, só que a partir da pasta do .exe.
+    if not _is_dev_build:
+        _migrate_data_from(_legacy_dir)
 else:
     BASE_DIR = _project_root
 env_path = BASE_DIR / ".env"

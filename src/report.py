@@ -133,7 +133,7 @@ def generate_html_report(jobs: List[Dict], output_file: Path) -> Path:
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Relatorio JobAutoFit - {now_str}</title>
+    <title>Relatorio VampHunter - {now_str}</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #333; }}
         .container {{ max-width: 1200px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
@@ -164,7 +164,7 @@ def generate_html_report(jobs: List[Dict], output_file: Path) -> Path:
 </head>
 <body>
     <div class="container">
-        <h1>JobAutoFit - Relatorio de Candidaturas</h1>
+        <h1>VampHunter - Relatorio de Candidaturas</h1>
         <p><strong>Data da Execução:</strong> {now_str}</p>
         
         <div class="stats">
@@ -214,7 +214,7 @@ def generate_markdown_report(jobs: List[Dict], output_file: Path) -> Path:
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
     md = [
-        f"# JobAutoFit - Relatorio Executivo ({now_str})\n",
+        f"# VampHunter - Relatorio Executivo ({now_str})\n",
         f"**Total de vagas analisadas:** {len(jobs)}\n",
         "---",
         "| # | Vaga | Empresa | Local | Match | Status | Descricao |",

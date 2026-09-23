@@ -6,7 +6,7 @@ from PyInstaller.building.splash import Splash
 # curriculum_base.json NUNCA deve entrar aqui: é dado pessoal real do usuário e ficaria
 # gravado dentro do binário para sempre — quem rodasse o .exe (ou o extraísse) veria os
 # dados de quem compilou. O código já lida bem com a ausência do arquivo (fica em branco).
-datas = [('.env.example', '.'), ('logo.ico', '.')]
+datas = [('.env.example', '.'), ('icon.ico', '.')]
 binaries = []
 hiddenimports = ['google.generativeai','plyer','pypdf','docx','config','logutil','main','filters','notify','importer','profile_generator','ats_optimizer','collector','db','report','sender','geo','validator','stealth','browser_auth',
                  # plyer resolve o backend de notificação por import dinâmico em runtime
@@ -58,8 +58,8 @@ exe = EXE(
     splash,
     splash.binaries,
     [],
-    name='JobAutoFit_v2',
-    icon='logo.ico' if sys.platform == 'win32' else None,  # .ico so existe pra Windows/macOS; no Linux nao ha icone embutido em ELF
+    name='VampHunter',
+    icon='icon.ico' if sys.platform == 'win32' else None,  # .ico so existe pra Windows/macOS; no Linux nao ha icone embutido em ELF
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -57,7 +57,7 @@ def call_openrouter_once(prompt: str, api_key: str, model: str, max_tokens: int 
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/Lucas-Baumann/Job-Auto-Fit",
-        "X-Title": "JobAutoFit",
+        "X-Title": "VampHunter",
     }
     payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens}
     return requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=45)

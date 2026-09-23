@@ -36,7 +36,7 @@ def _dpapi_protect(data: bytes) -> bytes:
     buf = ctypes.create_string_buffer(data, len(data))
     blob_in = DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
     blob_out = DATA_BLOB()
-    if not crypt32.CryptProtectData(ctypes.byref(blob_in), "JobAutoFit session", None, None, None, 0, ctypes.byref(blob_out)):
+    if not crypt32.CryptProtectData(ctypes.byref(blob_in), "VampHunter session", None, None, None, 0, ctypes.byref(blob_out)):
         raise ctypes.WinError(ctypes.get_last_error())
     try:
         return ctypes.string_at(blob_out.pbData, blob_out.cbData)

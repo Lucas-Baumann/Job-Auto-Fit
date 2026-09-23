@@ -1,1 +1,1 @@
-# JobAutoFit src package
+# VampHunter src package
