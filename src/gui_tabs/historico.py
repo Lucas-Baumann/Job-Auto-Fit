@@ -27,6 +27,9 @@ class HistoricoTabMixin:
         info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side=LEFT)
         tb.Button(actions,text="📝 Marcar Outcome",bootstyle="info-outline",command=self.mark_job_outcome).pack(side=LEFT,padx=10)
         info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side=LEFT)
+        self.btn_gen_docs=tb.Button(actions,text="📄 Gerar PDF/Carta",bootstyle="warning-outline",command=self.generate_docs_selected); self.btn_gen_docs.pack(side=LEFT,padx=10)
+        info_icon(actions,"Gera currículo otimizado + carta de apresentação pra vaga selecionada, mesmo que o\nmatch esteja abaixo do piso automático (50%) — dispara uma chamada de IA na hora.").pack(side=LEFT)
+        tb.Button(actions,text="📂 Abrir PDF/Carta",bootstyle="secondary-outline",command=self.open_docs_selected).pack(side=LEFT,padx=10)
 
         cols=("vaga","empresa","local","match","status","outcome","plataforma")
         self._hist_col_labels={"vaga":"Vaga","empresa":"Empresa","local":"Local","match":"Match","status":"Status","outcome":"Outcome","plataforma":"Plataforma"}
@@ -137,6 +140,56 @@ class HistoricoTabMixin:
                     messagebox.showerror("Aprovar e Enviar",str(e))
                 self.after(0, done_err)
         threading.Thread(target=worker, daemon=True).start()
+    def generate_docs_selected(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showinfo("Gerar PDF/Carta","Selecione uma vaga na lista."); return
+        job_id=int(sel[0])
+        try:
+            import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT * FROM jobs WHERE id=?",(job_id,)); row=cur.fetchone(); con.close()
+        except Exception as e: messagebox.showerror("Gerar PDF/Carta",str(e)); return
+        if not row: messagebox.showwarning("Gerar PDF/Carta","Vaga não encontrada."); return
+        if not messagebox.askyesno("Gerar PDF/Carta", f"Gerar currículo otimizado + carta de apresentação pra:\n{row['title']} @ {row['company']}\n\nIsso dispara uma chamada de IA agora (mesmo com match de {row['match_score'] or 0}%). Continuar?"):
+            return
+        row_dict=dict(row)
+        # mesma chamada de IA cara que process_job_ats() usa acima do piso automático - aqui
+        # roda sem checar o piso, já que é decisão explícita do usuário, não do pipeline. Roda
+        # em thread (mesmo padrão de approve_and_send_selected) pra não travar a GUI.
+        self.btn_gen_docs.config(state=DISABLED, text="Gerando…")
+        def worker():
+            try:
+                from ats_optimizer import generate_docs_for_job
+                from db import update_job_status
+                res=generate_docs_for_job(job_id, row_dict["title"], row_dict["company"], row_dict["description"])
+                update_job_status(job_id, row_dict["status"], resume_path=res["resume_path"], cover_path=res["cover_path"])
+                def done_ok():
+                    self.btn_gen_docs.config(state=NORMAL, text="📄 Gerar PDF/Carta")
+                    messagebox.showinfo("Gerar PDF/Carta",f"Gerado com sucesso pra {row_dict['title']} @ {row_dict['company']}.\nUse '📂 Abrir PDF/Carta' pra visualizar.")
+                    self._refresh_hist()
+                self.after(0, done_ok)
+            except Exception as e:
+                def done_err():
+                    self.btn_gen_docs.config(state=NORMAL, text="📄 Gerar PDF/Carta")
+                    messagebox.showerror("Gerar PDF/Carta",str(e))
+                self.after(0, done_err)
+        threading.Thread(target=worker, daemon=True).start()
+    def open_docs_selected(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showinfo("Abrir PDF/Carta","Selecione uma vaga na lista."); return
+        job_id=int(sel[0])
+        try:
+            import sqlite3; con=sqlite3.connect(str(DB_PATH)); con.row_factory=sqlite3.Row; cur=con.cursor()
+            cur.execute("SELECT resume_pdf_path, cover_letter_path FROM jobs WHERE id=?",(job_id,)); row=cur.fetchone(); con.close()
+        except Exception as e: messagebox.showerror("Abrir PDF/Carta",str(e)); return
+        if not row or not (row["resume_pdf_path"] or row["cover_letter_path"]):
+            messagebox.showinfo("Abrir PDF/Carta","Essa vaga ainda não tem PDF/carta gerados. Use '📄 Gerar PDF/Carta' primeiro."); return
+        opened=False
+        if row["resume_pdf_path"] and Path(row["resume_pdf_path"]).exists():
+            self._open_folder(row["resume_pdf_path"]); opened=True
+        if row["cover_letter_path"] and Path(row["cover_letter_path"]).exists():
+            self._open_folder(row["cover_letter_path"]); opened=True
+        if not opened:
+            messagebox.showwarning("Abrir PDF/Carta","Os caminhos salvos no banco não existem mais no disco (arquivo movido/apagado).")
     def mark_job_outcome(self):
         sel=self.tree.selection()
         if not sel: messagebox.showinfo("Outcome","Selecione uma vaga na lista."); return

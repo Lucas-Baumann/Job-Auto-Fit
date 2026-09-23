@@ -369,6 +369,20 @@ def _slugify_filename(name: str) -> str:
     name = re.sub(r'\s+', '_', name.strip())
     return name[:80] or "empresa"
 
+def _write_docs(job_id: int, company: str, optimized_cv: dict, cover_letter: str) -> Tuple[str, str]:
+    """Grava PDF + carta em disco e devolve os caminhos - compartilhado entre process_job_ats()
+    (fluxo automático, com piso de score) e generate_docs_for_job() (geração manual, aba
+    Histórico, sem piso)."""
+    company_slug = _slugify_filename(company)
+    pdf_filename = Config.OUTPUT_DIR / f"CV_{company_slug}_{job_id}.pdf"
+    cover_filename = Config.OUTPUT_DIR / f"CoverLetter_{company_slug}_{job_id}.txt"
+
+    generate_ats_pdf(optimized_cv, pdf_filename)
+    with open(cover_filename, 'w', encoding='utf-8') as f:
+        f.write(cover_letter)
+
+    return str(pdf_filename), str(cover_filename)
+
 def process_job_ats(job_id: int, job_title: str, company: str, job_description: str) -> dict:
     """Orquestra a análise ATS: primeiro só a pontuação (chamada curta e barata), e só paga o
     custo da chamada bem mais cara (currículo otimizado + carta de apresentação) quando o match
@@ -387,22 +401,28 @@ def process_job_ats(job_id: int, job_title: str, company: str, job_description: 
         }
 
     _, _, optimized_cv, cover_letter = evaluate_and_optimize_resume(job_title, company, job_description, base_cv)
-
-    company_slug = _slugify_filename(company)
-    pdf_filename = Config.OUTPUT_DIR / f"CV_{company_slug}_{job_id}.pdf"
-    cover_filename = Config.OUTPUT_DIR / f"CoverLetter_{company_slug}_{job_id}.txt"
-
-    # Gerar PDF
-    generate_ats_pdf(optimized_cv, pdf_filename)
-
-    # Salvar Carta de Apresentação
-    with open(cover_filename, 'w', encoding='utf-8') as f:
-        f.write(cover_letter)
+    pdf_filename, cover_filename = _write_docs(job_id, company, optimized_cv, cover_letter)
 
     return {
         "match_score": score,
         "match_reason": reason,
-        "resume_path": str(pdf_filename),
-        "cover_path": str(cover_filename),
+        "resume_path": pdf_filename,
+        "cover_path": cover_filename,
+        "cover_letter": cover_letter
+    }
+
+def generate_docs_for_job(job_id: int, job_title: str, company: str, job_description: str) -> dict:
+    """Gera currículo otimizado + carta de apresentação pra uma vaga específica, ignorando de
+    propósito o piso de Config.MIN_SCORE_FOR_DOCS - usado quando o usuário decide manualmente
+    gerar os documentos de uma vaga que ficou abaixo do piso automático (botão "Gerar PDF/Carta"
+    na aba Histórico). Sempre roda a chamada cara: é uma decisão explícita do usuário, não do
+    pipeline automático, então não faz sentido negar por score."""
+    base_cv = load_base_curriculum()
+    _, _, optimized_cv, cover_letter = evaluate_and_optimize_resume(job_title, company, job_description, base_cv)
+    pdf_filename, cover_filename = _write_docs(job_id, company, optimized_cv, cover_letter)
+
+    return {
+        "resume_path": pdf_filename,
+        "cover_path": cover_filename,
         "cover_letter": cover_letter
     }
