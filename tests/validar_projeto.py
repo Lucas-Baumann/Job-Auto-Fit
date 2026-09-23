@@ -94,7 +94,12 @@ except Exception as e:
 try:
     from ats_optimizer import process_job_ats
     res = process_job_ats(99999, "Python Developer", "AutoTest", "Python, Django, SQL")
-    ok("ATS", f"score={res['match_score']}%, pdf={pathlib.Path(res['resume_path']).exists()}, cover={pathlib.Path(res['cover_path']).exists()}")
+    # Path("").exists() é True (resolve pro diretório atual) — sem o bool(...) antes, um
+    # resume_path/cover_path vazio (score abaixo do piso de gerar documentos) reportava
+    # "pdf=True/cover=True" mesmo sem nenhum arquivo ter sido gerado de fato.
+    pdf_ok = bool(res['resume_path']) and pathlib.Path(res['resume_path']).exists()
+    cover_ok = bool(res['cover_path']) and pathlib.Path(res['cover_path']).exists()
+    ok("ATS", f"score={res['match_score']}%, pdf={pdf_ok}, cover={cover_ok}")
 except Exception as e:
     fail("ATS", str(e))
 

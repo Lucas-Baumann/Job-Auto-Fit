@@ -151,6 +151,61 @@ def _ats_cache_key(job_title: str, company: str, job_description: str, base_cv: 
     raw = json.dumps({"t": job_title, "c": company, "d": job_description, "cv": base_cv}, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+def evaluate_match_score(job_title: str, company: str, job_description: str, base_cv: dict) -> Tuple[int, str]:
+    """Só pede score+motivo pro LLM - prompt e resposta bem mais curtos que
+    evaluate_and_optimize_resume() (que também gera currículo otimizado + carta). Roda pra TODA
+    vaga processada, ANTES de decidir se vale a chamada cara: abaixo de Config.MIN_SCORE_FOR_DOCS
+    nunca vira candidatura de verdade, então gerar currículo+carta seria gasto de tokens à toa.
+    Sem cache (a chamada já é barata; cachear dobraria a complexidade sem ganho real)."""
+    skills_context = load_skills_context()
+    prompt = f"""
+Voce e um especialista em recrutamento e sistemas ATS (Applicant Tracking System).
+
+--- CONTEXTO DAS SKILLS DISPONIVEIS ---
+{skills_context}
+
+--- VAGA ---
+Titulo: {job_title}
+Empresa: {company}
+Descricao:
+{job_description[:3000]}
+
+--- CURRICULO BASE DO CANDIDATO ---
+{json.dumps(base_cv, ensure_ascii=False, indent=2)}
+
+--- INSTRUÇÕES ---
+Calcule a porcentagem de compatibilidade (0 a 100) entre a vaga e o currículo, e explique
+brevemente o motivo. NÃO reescreva nada do currículo aqui.
+
+Responda EXATAMENTE no seguinte formato JSON (sem markdown de bloco de codigo):
+{{
+  "match_score": 85,
+  "match_reason": "Breve justificativa dos pontos de aderencia."
+}}
+"""
+    response_text = call_llm(prompt)
+
+    score = 50
+    reason = "Análise preliminar realizada."
+
+    if response_text:
+        try:
+            clean_json = response_text.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(clean_json)
+            try:
+                score = max(0, min(100, int(parsed.get("match_score", 50))))
+            except (TypeError, ValueError):
+                score = 50
+            reason = parsed.get("match_reason", reason)
+        except Exception as e:
+            print(f"[ATS AI] Falha ao ler resposta JSON da IA (score): {e}")
+    else:
+        kw_count = sum(1 for kw in base_cv.get('skills', []) if kw.lower() in job_description.lower())
+        score = min(90, 40 + (kw_count * 10))
+        reason = f"Correspondência heurística de {kw_count} palavras-chave no texto da vaga."
+
+    return score, reason
+
 def evaluate_and_optimize_resume(job_title: str, company: str, job_description: str, base_cv: dict) -> Tuple[int, str, dict, str]:
     """
     Analisa o grau de compatibilidade e otimiza o curriculo para passar pelos filtros ATS.
@@ -315,21 +370,35 @@ def _slugify_filename(name: str) -> str:
     return name[:80] or "empresa"
 
 def process_job_ats(job_id: int, job_title: str, company: str, job_description: str) -> dict:
-    """Orquestra a análise ATS e a geração dos arquivos (PDF e Cover Letter)."""
+    """Orquestra a análise ATS: primeiro só a pontuação (chamada curta e barata), e só paga o
+    custo da chamada bem mais cara (currículo otimizado + carta de apresentação) quando o match
+    atinge Config.MIN_SCORE_FOR_DOCS - antes disso os dois documentos eram sempre gerados pra
+    toda vaga coletada, mesmo as com match baixíssimo que nunca viram candidatura de verdade."""
     base_cv = load_base_curriculum()
-    score, reason, optimized_cv, cover_letter = evaluate_and_optimize_resume(job_title, company, job_description, base_cv)
+    score, reason = evaluate_match_score(job_title, company, job_description, base_cv)
+
+    if score < Config.MIN_SCORE_FOR_DOCS:
+        return {
+            "match_score": score,
+            "match_reason": reason,
+            "resume_path": "",
+            "cover_path": "",
+            "cover_letter": ""
+        }
+
+    _, _, optimized_cv, cover_letter = evaluate_and_optimize_resume(job_title, company, job_description, base_cv)
 
     company_slug = _slugify_filename(company)
     pdf_filename = Config.OUTPUT_DIR / f"CV_{company_slug}_{job_id}.pdf"
     cover_filename = Config.OUTPUT_DIR / f"CoverLetter_{company_slug}_{job_id}.txt"
-    
+
     # Gerar PDF
     generate_ats_pdf(optimized_cv, pdf_filename)
-    
+
     # Salvar Carta de Apresentação
     with open(cover_filename, 'w', encoding='utf-8') as f:
         f.write(cover_letter)
-        
+
     return {
         "match_score": score,
         "match_reason": reason,

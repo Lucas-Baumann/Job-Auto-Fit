@@ -111,6 +111,11 @@ class Config:
     TARGET_KEYWORDS = ["Desenvolvedor Python", "Python Developer", "Engenheiro de Software", "Desenvolvedor Backend"]
     TARGET_LOCATION = "Brasil" # Ou "Remoto", "São Paulo"
     MIN_MATCH_SCORE = 60 # Porcentagem mínima de aderência para candidatar-se
+    # Pisos fixos (não configuráveis pela GUI) pra não gastar chamada de IA cara nem espaço no
+    # relatório com vaga que não tem chance real de virar candidatura - independente do "Score
+    # mínimo" configurável, que só decide se aplica de verdade.
+    MIN_SCORE_TO_LIST = 40   # abaixo disso, vaga nem aparece no relatório da sessão
+    MIN_SCORE_FOR_DOCS = 50  # abaixo disso, não gera currículo otimizado nem carta (chamada de IA mais cara)
     WORK_MODE = os.getenv("WORK_MODE", "remoto")  # remoto | presencial | hibrido | indiferente
     PRESENCIAL_LOCATION = os.getenv("PRESENCIAL_LOCATION", "")
     CONTRACT_TYPE = os.getenv("CONTRACT_TYPE", "indiferente")  # clt | pj | indiferente

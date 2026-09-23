@@ -136,7 +136,14 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
             log_print(f"   -> Match ATS: {score}% ({reason})")
 
             if score >= min_score:
-                if dry_run:
+                if not pdf_path:
+                    # min_score configurado abaixo do piso de Config.MIN_SCORE_FOR_DOCS - vaga
+                    # passou no score mínimo mas não tem PDF/carta gerados (nunca são gerados
+                    # abaixo do piso, pra não gastar chamada de IA cara à toa em vaga de match
+                    # baixo). Sem material pronto não dá pra aplicar de verdade.
+                    log_print(f"   -> Match aceito ({score}%), mas abaixo do piso de {Config.MIN_SCORE_FOR_DOCS}% pra gerar PDF/carta automaticamente. Ajuste 'Score mínimo' pra {Config.MIN_SCORE_FOR_DOCS}%+ se quiser aplicar aqui.")
+                    status = 'skipped'
+                elif dry_run:
                     log_print("   -> [Dry-Run] Simulação ativa. PDF e carta gerados, candidatura não disparada.")
                     status = 'prepared'
                 elif not auto_send:
@@ -166,14 +173,18 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
 
     # 4. Obter Histórico da Sessão para o Relatório
     session_jobs = get_all_jobs_in_session(session_start_iso)
+    # vaga com match muito baixo não tem chance real de virar candidatura - não teria porque
+    # aparecer no relatório da sessão (ainda fica salva no banco/Histórico normalmente, só não
+    # entra nesta listagem específica).
+    report_jobs = [j for j in session_jobs if (j.get('match_score') or 0) >= Config.MIN_SCORE_TO_LIST]
 
     # 5. Gerar Relatórios
     timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S")
     html_report_path = Config.REPORTS_DIR / f"relatorio_{timestamp_slug}.html"
     md_report_path = Config.REPORTS_DIR / f"relatorio_{timestamp_slug}.md"
 
-    generate_html_report(session_jobs, html_report_path)
-    generate_markdown_report(session_jobs, md_report_path)
+    generate_html_report(report_jobs, html_report_path)
+    generate_markdown_report(report_jobs, md_report_path)
 
     log_print("\n" + "=" * 65)
     log_print("[+] CICLO DE AUTOMAÇÃO CONCLUÍDO COM SUCESSO!")
@@ -183,12 +194,12 @@ def run_pipeline(keywords, location, min_score, dry_run=False, enable_linkedin_p
     log_print("=" * 65)
     # notificação
     try:
-        high = sum(1 for j in session_jobs if j.get("match_score", 0) >= 80)
-        notify_all("JobAutoFit concluído", f"{len(session_jobs)} vagas analisadas, {high} com match >=80%. Relatório: {html_report_path.name}")
+        high = sum(1 for j in report_jobs if j.get("match_score", 0) >= 80)
+        notify_all("JobAutoFit concluído", f"{len(report_jobs)} vagas analisadas, {high} com match >=80%. Relatório: {html_report_path.name}")
     except Exception:
         pass
 
-    return {"session_jobs": session_jobs, "html_report_path": html_report_path, "md_report_path": md_report_path}
+    return {"session_jobs": report_jobs, "html_report_path": html_report_path, "md_report_path": md_report_path}
 
 
 def main():
