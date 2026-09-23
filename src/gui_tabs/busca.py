@@ -56,7 +56,7 @@ class BuscaTabMixin:
         card_posts=tb.Labelframe(inner,text="LinkedIn — Posts de Recrutadores (nova fonte)",padding=10,bootstyle="warning"); card_posts.pack(fill=X,pady=5)
         row_posts=tb.Frame(card_posts); row_posts.pack(fill=X)
         tb.Checkbutton(row_posts,text="Buscar também posts de recrutadores no LinkedIn",variable=self.var_enable_linkedin_posts,bootstyle="round-toggle").pack(side=LEFT,padx=5)
-        info_icon(row_posts, "Ativa coleta em posts/feed de recrutadores no LinkedIn (ex: 'Estamos contratando').\nFiltra por sinais de recrutador (Recruiter/RH/Talent) + keywords de vaga.\nSem login usa scraping guest (frágil, pode pegar poucos). Com login + Playwright é mais confiável.\nMonta busca booleana: Python Developer → \"vaga\" OR \"contratando\" OR \"hiring\" OR ... AND \"Python Developer\"").pack(side=LEFT)
+        info_icon(row_posts, "Ativa coleta em posts/feed de recrutadores no LinkedIn (ex: 'Estamos contratando').\nBusca a keyword da vaga como frase exata (últimos 7 dias) e filtra por sinais de\nrecrutador (Recruiter/RH/Talent) + keywords de contratação no texto de cada post.\nSem login usa scraping guest (frágil, pode pegar poucos). Com login + Playwright é mais confiável.").pack(side=LEFT)
         row_posts2=tb.Frame(card_posts); row_posts2.pack(fill=X,pady=4)
         tb.Label(row_posts2,text="Limite posts/keyword").pack(side=LEFT,padx=5); tb.Spinbox(row_posts2,from_=1,to=20,textvariable=self.var_linkedin_posts_limit,width=6).pack(side=LEFT,padx=5)
         info_icon(row_posts2, "Limite de posts por keyword.\n>10 sem login (guest) = falha/authwall garantida. Com login + Playwright suporta 10-15.\nCada post = 1 request + 1 detalhe, respeita daily_limit.").pack(side=LEFT)

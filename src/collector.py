@@ -55,25 +55,17 @@ HIRING_KEYWORDS = [
     "job opening", "job opportunity", "apply now", "#vaga", "#vagas", "#hiring", "#oportunidade"
 ]
 
-# Subconjunto curto e forte de HIRING_KEYWORDS, só pra montar a query booleana da busca (ver
-# _boolean_hiring_query). Os 21 termos de HIRING_KEYWORDS inteiros deixavam a query longa
-# demais (~370 caracteres, 21 OR's) e voltava 0 resultado sempre, mesmo logado - o buscador de
-# conteúdo do LinkedIn não é um motor booleano completo, e uma query desse tamanho não é o que
-# um recrutador digitaria (X-ray search de verdade usa poucos termos). HIRING_KEYWORDS continua
-# sendo usado inteiro em _has_hiring_keyword (ali é só substring match no texto já baixado, não
-# uma query pro buscador, então o tamanho não importa).
-BOOLEAN_HIRING_TERMS = [
-    "estamos contratando", "vaga para", "oportunidade para", "contratando", "envie seu currículo", "hiring"
-]
-
-def _boolean_hiring_query(keywords: str) -> str:
-    """Monta query booleana pro buscador de conteúdo do LinkedIn, no formato que o próprio
-    buscador espera: operador (AND/OR) em maiúsculo, SEM parênteses (LinkedIn não agrupa por
-    parênteses como um buscador booleano "de verdade" - ele lê a query da esquerda pra direita)
-    e TODO termo de busca entre aspas, mesmo palavra única."""
-    hiring_group = " OR ".join(f'"{kw}"' for kw in BOOLEAN_HIRING_TERMS)
-    kw = keywords.strip()
-    return f'{hiring_group} AND "{kw}"'
+# Testei ao vivo (conta logada, colando query direto na busca do LinkedIn) três formatos de
+# busca booleana combinando o grupo de termos de contratação (OR) com a keyword da vaga (AND):
+# sem parênteses, e com parênteses agrupando o OR - nenhum dos dois voltou resultado correto
+# (sem parênteses o AND "vaza" e filtra errado; com parênteses o cruzamento deu 0 resultados,
+# mesmo existindo post que bate nos dois critérios separadamente). O buscador de conteúdo do
+# LinkedIn simplesmente não trata AND/OR combinados de forma confiável - só um AND puro entre
+# dois termos (ex: "hiring" AND "Desenvolvedor Mobile") funcionou nos testes. Por isso a busca
+# nem tenta mais boolear o sinal de contratação: manda só a keyword da vaga (frase exata, entre
+# aspas - formato mais básico e confiável) e deixa o corte por "isso parece post de vaga mesmo"
+# inteiro por conta de _has_hiring_keyword(), que já roda em cima do texto de cada post
+# baixado, sem depender de o LinkedIn interpretar boolean nenhum.
 
 def _linkedin_posts_search_url(keywords: str, extra_params: dict = None) -> str:
     """Monta a URL de busca de posts do LinkedIn: /search/results/content/ já restringe o tipo
@@ -82,7 +74,7 @@ def _linkedin_posts_search_url(keywords: str, extra_params: dict = None) -> str:
     publicações da última semana - post de recrutador "estamos contratando" de meses atrás
     quase sempre já não vale mais a pena (vaga provavelmente já fechou)."""
     params = {
-        "keywords": _boolean_hiring_query(keywords),
+        "keywords": f'"{keywords.strip()}"',
         "origin": "GLOBAL_SEARCH_HEADER",
         "sortBy": '"date_posted"',
         "datePosted": '"past-week"',
