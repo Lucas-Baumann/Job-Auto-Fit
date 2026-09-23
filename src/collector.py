@@ -665,10 +665,6 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
     jobs: List[Dict] = []
     if _backoff_active("linkedin_post"):
         return jobs
-    # busca booleana (AND/OR + frases entre aspas) em vez de concatenar texto livre - o
-    # buscador de conteúdo do LinkedIn suporta a mesma sintaxe de X-ray search que
-    # recrutador usa, e isso reduz muito post fora de contexto que só batia por coincidência
-    # de palavra solta. Restrita a Posts, ordenada por mais recente, última semana.
     search_url = _linkedin_posts_search_url(keywords, extra_params={"sid": "jobautofit"})
     try:
         resp = requests.get(search_url, headers=_headers(), timeout=12)
