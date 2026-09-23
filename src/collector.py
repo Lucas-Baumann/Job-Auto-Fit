@@ -399,6 +399,33 @@ def fetch_infojobs_jobs(keywords: str, limit: int = 10) -> List[Dict]:
         log_print(f"[Collector][InfoJobs] 0 vagas para '{keywords}' — seletor pode estar desatualizado (site mudou HTML) ou sem resultado real.")
     return jobs
 
+def fetch_catho_job_details(job_url: str) -> str:
+    """Busca a descrição completa de uma vaga do Catho a partir do JobPosting (schema.org)
+    embutido na própria página - dado estruturado que o site expõe pro Google indexar a vaga,
+    bem mais estável que depender de nome de classe CSS. Sem isso, a 'description' salva era só
+    o texto resumido do card da lista de busca (~150 caracteres, tipo 'Atualizada em 01/09 ...
+    Enviando CV...'), sem conteúdo real nenhum - os filtros de regime de trabalho, contrato,
+    salário e palavras obrigatórias/excluídas ficavam cegos pra toda vaga do Catho, porque não
+    tinham texto de verdade pra procurar sinal nenhum."""
+    if _backoff_active("catho"):
+        return ""
+    try:
+        resp = requests.get(job_url, headers=_headers(), timeout=8)
+        if resp.status_code in (429, 999):
+            _trip_backoff("catho", resp.status_code)
+        elif resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            for script in soup.find_all('script', type='application/ld+json'):
+                try:
+                    data = json.loads(script.string)
+                except Exception:
+                    continue
+                if isinstance(data, dict) and data.get('@type') == 'JobPosting':
+                    return (data.get('description') or '').strip()
+    except Exception:
+        pass
+    return ""
+
 def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
     """Coleta vagas públicas da Catho, com empresa/localização reais por vaga (evita fixar
     'Catho'/'Brasil' pra tudo, o que enfraquecia os filtros de vaga_no_exterior/vaga_antiga).
@@ -432,7 +459,9 @@ def fetch_catho_jobs(keywords: str, limit: int = 10) -> List[Dict]:
                         loc_text = loc_p.get_text(' ', strip=True)
                         location = re.sub(r'^\d+\s*vagas?\s*-\s*', '', loc_text).strip() or "Brasil"
 
-                desc = card.get_text(separator=' ', strip=True)[:1200]
+                card_desc = card.get_text(separator=' ', strip=True)[:1200]
+                full_desc = fetch_catho_job_details(job_url) if job_url else ""
+                desc = full_desc or card_desc
                 jobs.append({
                     'title': title[:90],
                     'company': company[:120],
@@ -803,24 +832,52 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
                 page.mouse.wheel(0, 2000)
                 page.wait_for_timeout(2000)
 
-            # extrai posts visíveis
-            posts = page.query_selector_all('div.feed-shared-update-v2, div.search-result__wrapper, div.entity-result')
+            # Extrai posts visíveis. LinkedIn passou a gerar as classes CSS ofuscadas/hasheadas
+            # (ex: "be17bb20", trocam a cada deploy do site) - os seletores antigos baseados em
+            # nome de classe semântico (feed-shared-update-v2 etc.) nunca mais bateram com nada,
+            # por isso a busca sempre voltava 0 posts mesmo com sessão válida e resultado real na
+            # tela (confirmado inspecionando a página ao vivo). Troquei para atributos estáveis
+            # que sobrevivem a esses redeploys: role="listitem" (papel de acessibilidade, não é
+            # CSS) marca cada post da lista, componentkey começando com "update-card-focus"
+            # confirma que é post de feed (não outro tipo de item de lista da página), e
+            # data-testid="expandable-text-box" isola o texto do post sem o "chrome" da UI
+            # (nome do autor, botão Seguir, contadores de reação etc.).
+            posts = page.query_selector_all('div[role="listitem"]')
             for post in posts[:limit*2]:
                 if len(jobs) >= limit: break
                 try:
-                    text_el = post.query_selector('div.feed-shared-update-v2__description, span.break-words, div.update-components-text')
-                    text = text_el.inner_text() if text_el else post.inner_text()
-                    if not text or len(text) < 60 or not _has_hiring_keyword(text):
+                    component_key = post.get_attribute("componentkey") or ""
+                    if not component_key.startswith("update-card-focus"):
                         continue
-                    author_el = post.query_selector('span.feed-shared-actor__name, a.update-components-actor__title')
-                    author = author_el.inner_text().strip() if author_el else ""
-                    author_title_el = post.query_selector('span.update-components-actor__description')
-                    author_title = author_title_el.inner_text().strip() if author_title_el else ""
+                    full_card_text = post.inner_text()  # inclui nome/cargo do autor - usado só pra detectar sinal de recrutador/contratação
+                    text_el = post.query_selector('[data-testid="expandable-text-box"]')
+                    text = text_el.inner_text() if text_el else full_card_text
+                    if not text or len(text) < 60 or not _has_hiring_keyword(full_card_text):
+                        continue
 
-                    link_el = post.query_selector('a[href*="/posts/"], a[href*="/feed/update/"]')
-                    url = link_el.get_attribute('href') if link_el else search_url
-                    if url and url.startswith("/"): url = "https://www.linkedin.com" + url
-                    if url: url = url.split("?")[0]
+                    # o card tem vários links pro mesmo perfil (foto, nome, badge de verificado)
+                    # - o primeiro costuma ser o da foto, sem texto nenhum, então percorre até
+                    # achar um com texto visível (o nome de verdade)
+                    author_els = post.query_selector_all('a[href*="/in/"]')
+                    author = ""
+                    author_url = ""
+                    for a_el in author_els:
+                        author_url = author_url or a_el.get_attribute("href")
+                        # o link do nome vem com o badge de grau de conexão ("2º") grudado
+                        # embaixo, separado por quebra de linha - só a primeira linha é o nome
+                        candidate = next((l.strip() for l in a_el.inner_text().splitlines() if l.strip()), "")
+                        if candidate:
+                            author = candidate
+                            break
+                    # Link direto do post não fica mais exposto no HTML estático (LinkedIn
+                    # resolve a navegação via JS/estado interno) - usa o perfil do autor como
+                    # link clicável (ainda leva a algo útil: dá pra abrir o perfil e ver mais
+                    # posts dessa pessoa), com a busca como último fallback.
+                    url = author_url or search_url
+
+                    is_recruiter = _is_recruiter_text(full_card_text)
+                    if not is_recruiter and not any(kw in full_card_text.lower() for kw in ["vaga", "oportunidade", "hiring", "contratando"]):
+                        continue
 
                     jobs.append({
                         'title': _extract_title_from_post(text, keywords),
@@ -831,7 +888,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
                         'description': text[:4000],
                         'contact_email': extract_email(text),
                         'author': author,
-                        'author_title': author_title
+                        'author_title': ""
                     })
                 except Exception:
                     continue
