@@ -2,6 +2,7 @@ import re
 import time
 import json
 import unicodedata
+import urllib.parse
 import requests
 import concurrent.futures
 from bs4 import BeautifulSoup
@@ -54,15 +55,41 @@ HIRING_KEYWORDS = [
     "job opening", "job opportunity", "apply now", "#vaga", "#vagas", "#hiring", "#oportunidade"
 ]
 
+# Subconjunto curto e forte de HIRING_KEYWORDS, só pra montar a query booleana da busca (ver
+# _boolean_hiring_query). Os 21 termos de HIRING_KEYWORDS inteiros deixavam a query longa
+# demais (~370 caracteres, 21 OR's) e voltava 0 resultado sempre, mesmo logado - o buscador de
+# conteúdo do LinkedIn não é um motor booleano completo, e uma query desse tamanho não é o que
+# um recrutador digitaria (X-ray search de verdade usa poucos termos). HIRING_KEYWORDS continua
+# sendo usado inteiro em _has_hiring_keyword (ali é só substring match no texto já baixado, não
+# uma query pro buscador, então o tamanho não importa).
+BOOLEAN_HIRING_TERMS = [
+    "estamos contratando", "vaga para", "oportunidade para", "contratando", "envie seu currículo", "hiring"
+]
+
 def _boolean_hiring_query(keywords: str) -> str:
     """Monta query booleana pro buscador de conteúdo do LinkedIn, no formato que o próprio
     buscador espera: operador (AND/OR) em maiúsculo, SEM parênteses (LinkedIn não agrupa por
     parênteses como um buscador booleano "de verdade" - ele lê a query da esquerda pra direita)
-    e TODO termo de busca entre aspas, mesmo palavra única. Reaproveita HIRING_KEYWORDS (mesma
-    lista já usada em _has_hiring_keyword)."""
-    hiring_group = " OR ".join(f'"{kw}"' for kw in HIRING_KEYWORDS)
+    e TODO termo de busca entre aspas, mesmo palavra única."""
+    hiring_group = " OR ".join(f'"{kw}"' for kw in BOOLEAN_HIRING_TERMS)
     kw = keywords.strip()
     return f'{hiring_group} AND "{kw}"'
+
+def _linkedin_posts_search_url(keywords: str, extra_params: dict = None) -> str:
+    """Monta a URL de busca de posts do LinkedIn: /search/results/content/ já restringe o tipo
+    de resultado a Posts (publicações) - diferente de /search/results/people/, /jobs/ ou
+    /companies/, que são buscas de outro tipo de conteúdo. Ordena por mais recente e limita a
+    publicações da última semana - post de recrutador "estamos contratando" de meses atrás
+    quase sempre já não vale mais a pena (vaga provavelmente já fechou)."""
+    params = {
+        "keywords": _boolean_hiring_query(keywords),
+        "origin": "GLOBAL_SEARCH_HEADER",
+        "sortBy": '"date_posted"',
+        "datePosted": '"past-week"',
+    }
+    if extra_params:
+        params.update(extra_params)
+    return "https://www.linkedin.com/search/results/content/?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
 
 def extract_email(text: str) -> str:
     """Extrai e-mail de contato do texto da vaga se existente."""
@@ -649,9 +676,8 @@ def _fetch_linkedin_posts_guest(keywords: str, limit: int = 10) -> List[Dict]:
     # busca booleana (AND/OR + frases entre aspas) em vez de concatenar texto livre - o
     # buscador de conteúdo do LinkedIn suporta a mesma sintaxe de X-ray search que
     # recrutador usa, e isso reduz muito post fora de contexto que só batia por coincidência
-    # de palavra solta
-    expanded = _boolean_hiring_query(keywords)
-    search_url = f"https://www.linkedin.com/search/results/content/?keywords={requests.utils.quote(expanded)}&origin=GLOBAL_SEARCH_HEADER&sid=jobautofit"
+    # de palavra solta. Restrita a Posts, ordenada por mais recente, última semana.
+    search_url = _linkedin_posts_search_url(keywords, extra_params={"sid": "jobautofit"})
     try:
         resp = requests.get(search_url, headers=_headers(), timeout=12)
         if resp.status_code in (999, 429):
@@ -767,8 +793,7 @@ def _fetch_linkedin_posts_via_playwright(keywords: str, limit: int = 10) -> List
         log_print("[Collector][Posts] Sessão do LinkedIn salva, mas Playwright não está disponível nesta instalação — login real não roda, caindo para busca guest (sempre 0, LinkedIn exige login).")
         return jobs
 
-    expanded = _boolean_hiring_query(keywords)
-    search_url = f"https://www.linkedin.com/search/results/content/?keywords={requests.utils.quote(expanded)}&origin=GLOBAL_SEARCH_HEADER"
+    search_url = _linkedin_posts_search_url(keywords)
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
