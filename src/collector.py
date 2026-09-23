@@ -55,16 +55,14 @@ HIRING_KEYWORDS = [
 ]
 
 def _boolean_hiring_query(keywords: str) -> str:
-    """Monta query booleana (AND/OR + frases entre aspas) pro buscador de conteúdo do LinkedIn,
-    no mesmo estilo de X-ray search que recrutador usa pra achar post de vaga - antes só
-    concatenava texto livre ('python developer vaga contratando hiring'), que o buscador do
-    LinkedIn trata como termos soltos (OR implícito frouxo), trazendo post que só cita uma
-    palavra qualquer sem relação com vaga nenhuma. Reaproveita HIRING_KEYWORDS (mesma lista já
-    usada em _has_hiring_keyword)."""
-    hiring_group = " OR ".join(f'"{kw}"' if " " in kw else kw for kw in HIRING_KEYWORDS)
+    """Monta query booleana pro buscador de conteúdo do LinkedIn, no formato que o próprio
+    buscador espera: operador (AND/OR) em maiúsculo, SEM parênteses (LinkedIn não agrupa por
+    parênteses como um buscador booleano "de verdade" - ele lê a query da esquerda pra direita)
+    e TODO termo de busca entre aspas, mesmo palavra única. Reaproveita HIRING_KEYWORDS (mesma
+    lista já usada em _has_hiring_keyword)."""
+    hiring_group = " OR ".join(f'"{kw}"' for kw in HIRING_KEYWORDS)
     kw = keywords.strip()
-    kw_term = f'"{kw}"' if " " in kw else kw
-    return f'({hiring_group}) AND {kw_term}'
+    return f'{hiring_group} AND "{kw}"'
 
 def extract_email(text: str) -> str:
     """Extrai e-mail de contato do texto da vaga se existente."""
