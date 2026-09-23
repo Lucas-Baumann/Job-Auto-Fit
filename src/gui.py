@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from config import Config
+from config import Config, resource_path
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
@@ -24,6 +24,14 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
     def __init__(self):
         super().__init__(themename="darkly")
         self.title("VampHunter — Automação Completa (Gupy / LinkedIn / ATS)")
+        # icone do .exe (Explorer/Propriedades) é o documento com presas (icon.ico, ver
+        # VampHunter.spec) - mas o icone da JANELA em execução (barra de tarefas + canto da
+        # barra de título) é o morcego, um ícone separado só pra isso, mais simples e legível
+        # em tamanho pequeno.
+        try:
+            self.iconbitmap(str(resource_path("icon_taskbar.ico")))
+        except Exception:
+            pass
         self.geometry("1280x820"); self.minsize(1200,750)
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
         try:

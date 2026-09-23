@@ -8,6 +8,14 @@ _project_root = Path(__file__).resolve().parent.parent
 
 # Detecta PyInstaller via sys._MEIPASS ou sys.frozen ou caminho com _MEI
 is_frozen = getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS') or "_MEI" in str(Path(__file__).resolve())
+
+def resource_path(filename: str) -> Path:
+    """Caminho de um arquivo bundlado só-leitura (ícone, imagem) — diferente de BASE_DIR, que
+    é onde o app GRAVA dado do usuário. Empacotado, esses arquivos ficam extraídos em
+    sys._MEIPASS (pasta temp do onefile); em dev, são só relativos à raiz do projeto."""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS) / filename
+    return _project_root / filename
 if is_frozen:
     # Chromium do Playwright fica bundlado dentro do .exe (build em CI instala com
     # PLAYWRIGHT_BROWSERS_PATH=0, gravando em .local-browsers em vez do cache global do
