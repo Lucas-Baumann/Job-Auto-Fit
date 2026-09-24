@@ -8,7 +8,7 @@ import customtkinter as ctk
 from config import Config
 from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
+    OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk, card,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -18,31 +18,36 @@ class HistoricoTabMixin:
     def _build_hist(self):
         f=self.tab_hist
         t=style_ttk()
-        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x")
-        ctk.CTkButton(top,text="🗑 Limpar Histórico",width=140,fg_color="transparent",border_width=1,border_color=t["danger"],
-                      text_color=t["danger"],hover_color=t["card_bg"],command=self.clear_history).pack(side="right")
-        ctk.CTkButton(top,text="Atualizar",width=100,fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["card_bg"],command=self._refresh_hist).pack(side="right",padx=(0,8))
+        # botões/legenda ficavam soltos no fundo da aba (sem moldura) enquanto a tabela
+        # embaixo já tinha borda arredondada - mesma moldura aqui pra não parecer duas
+        # seções desencontradas.
+        card_top, top = card(f, "Histórico de Candidaturas")
+        card_top.pack(fill="x", pady=(0,10))
+        btn_row=ctk.CTkFrame(top, fg_color="transparent"); btn_row.pack(fill="x")
+        ctk.CTkButton(btn_row,text="🗑 Limpar Histórico",width=140,fg_color="transparent",border_width=1,border_color=t["danger"],
+                      text_color=t["danger"],hover_color=t["window_bg"],command=self.clear_history).pack(side="right")
+        ctk.CTkButton(btn_row,text="Atualizar",width=100,fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["window_bg"],command=self._refresh_hist).pack(side="right",padx=(0,8))
         # legenda em linha própria (não inline com os botões) - competindo por espaço com os
         # 2 botões nessa mesma fileira, o texto comprido ficava espremido/cortado.
-        ctk.CTkLabel(f,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
+        ctk.CTkLabel(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
                      text_color=t["text_dim"],justify="left",anchor="w").pack(fill="x",pady=(4,8))
 
-        actions=ctk.CTkFrame(f, fg_color="transparent"); actions.pack(fill="x",pady=(0,8))
+        actions=ctk.CTkFrame(top, fg_color="transparent"); actions.pack(fill="x")
         self.btn_approve_send=ctk.CTkButton(actions,text="✔ Aprovar e Enviar (selecionada)",fg_color=t["success"],
                                              hover_color=t["border"],command=self.approve_and_send_selected)
         self.btn_approve_send.pack(side="left",padx=(0,4))
         info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side="left")
         ctk.CTkButton(actions,text="📝 Marcar Outcome",fg_color="transparent",border_width=1,border_color=t["primary"],
-                      text_color=t["primary"],hover_color=t["card_bg"],command=self.mark_job_outcome).pack(side="left",padx=(16,4))
+                      text_color=t["primary"],hover_color=t["window_bg"],command=self.mark_job_outcome).pack(side="left",padx=(16,4))
         info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side="left")
         self.btn_gen_docs=ctk.CTkButton(actions,text="📄 Gerar PDF/Carta",fg_color="transparent",border_width=1,
-                                         border_color=t["primary"],text_color=t["primary"],hover_color=t["card_bg"],
+                                         border_color=t["primary"],text_color=t["primary"],hover_color=t["window_bg"],
                                          command=self.generate_docs_selected)
         self.btn_gen_docs.pack(side="left",padx=(16,4))
         info_icon(actions,"Gera currículo otimizado + carta de apresentação pra vaga selecionada, mesmo que o\nmatch esteja abaixo do piso automático (50%) — dispara uma chamada de IA na hora.").pack(side="left")
         ctk.CTkButton(actions,text="📂 Abrir PDF/Carta",fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["card_bg"],command=self.open_docs_selected).pack(side="left",padx=(16,0))
+                      text_color=t["text"],hover_color=t["window_bg"],command=self.open_docs_selected).pack(side="left",padx=(16,0))
 
         cols=("vaga","empresa","local","match","status","outcome","plataforma")
         self._hist_col_labels={"vaga":"Vaga","empresa":"Empresa","local":"Local","match":"Match","status":"Status","outcome":"Outcome","plataforma":"Plataforma"}

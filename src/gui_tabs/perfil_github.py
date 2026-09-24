@@ -18,42 +18,45 @@ class PerfilGithubTabMixin:
     def _build_profile(self):
         f=self.tab_profile
         t=style_ttk()
-        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x",pady=(0,8))
+        # antes só a seção de repositórios tinha o card arredondado (via card()) - a de cima
+        # (username/token/botões/log) ficava direto no fundo da aba, sem moldura, com visual
+        # destoante da de baixo. As duas agora usam o mesmo card().
+        card_top, top_content = card(f, "README do Perfil")
+        card_top.pack(fill="x", pady=(0,10))
+
+        top=ctk.CTkFrame(top_content, fg_color="transparent"); top.pack(fill="x",pady=(0,8))
         ctk.CTkLabel(top,text="Username GitHub",text_color=t["text_dim"]).pack(side="left",padx=(0,6))
         ctk.CTkEntry(top,textvariable=self.var_profile_user,width=180).pack(side="left",padx=(0,10))
         ctk.CTkCheckBox(top,text="Usar IA para reescrever bio",variable=self.var_profile_use_llm).pack(side="left")
         info_icon(top,"Se ativado e IA configurada (aba 3), reescreve bio/linhas typing com seu currículo + perfil antigo. Sem IA usa heurístico.").pack(side="left")
 
-        token_row=ctk.CTkFrame(f, fg_color="transparent"); token_row.pack(fill="x",pady=(0,8))
+        token_row=ctk.CTkFrame(top_content, fg_color="transparent"); token_row.pack(fill="x",pady=(0,8))
         ctk.CTkLabel(token_row,text="GitHub Token (repo scope)",text_color=t["text_dim"]).pack(side="left",padx=(0,6))
         self.ent_github_token=ctk.CTkEntry(token_row,textvariable=self.var_github_token,show="*")
         self.ent_github_token.pack(side="left",padx=(0,6),fill="x",expand=True)
         info_icon(token_row,"Crie em github.com/settings/tokens (classic) com scope 'repo' — necessário para push direto. Deixe vazio para só gerar local.").pack(side="left")
         ctk.CTkButton(token_row,text="Salvar",width=80,fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["card_bg"],command=lambda:self.save_all(silent=True)).pack(side="left",padx=(6,0))
+                      text_color=t["text"],hover_color=t["window_bg"],command=lambda:self.save_all(silent=True)).pack(side="left",padx=(6,0))
 
-        btns=ctk.CTkFrame(f, fg_color="transparent"); btns.pack(fill="x",pady=(0,8))
+        btns=ctk.CTkFrame(top_content, fg_color="transparent"); btns.pack(fill="x",pady=(0,8))
         ctk.CTkButton(btns,text="🔍 Analisar perfil antigo",fg_color="transparent",border_width=1,border_color=t["primary"],
-                      text_color=t["primary"],hover_color=t["card_bg"],command=self.analyze_profile).pack(side="left",padx=(0,6))
+                      text_color=t["primary"],hover_color=t["window_bg"],command=self.analyze_profile).pack(side="left",padx=(0,6))
         ctk.CTkButton(btns,text="✨ Gerar README Perfil",fg_color=t["success"],hover_color=t["border"],
                       command=self.generate_profile).pack(side="left",padx=6)
         ctk.CTkButton(btns,text="🚀 Gerar e Push Perfil",fg_color=t["success"],hover_color=t["border"],
                       command=self.generate_and_push_profile).pack(side="left",padx=6)
         ctk.CTkButton(btns,text="📂 Abrir output_github",fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["card_bg"],command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side="left",padx=6)
+                      text_color=t["text"],hover_color=t["window_bg"],command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side="left",padx=6)
         ctk.CTkButton(btns,text="📋 Copiar workflow snake",fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["card_bg"],command=self.copy_snake_workflow).pack(side="left",padx=6)
+                      text_color=t["text"],hover_color=t["window_bg"],command=self.copy_snake_workflow).pack(side="left",padx=6)
 
-        log_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
-        log_outer.pack(fill="both",expand=True,pady=(0,8))
-        self.txt_profile_log=tk.Text(log_outer,height=8,bg=t["card_bg"],fg=t["text"],font=("Consolas",9),
+        self.txt_profile_log=tk.Text(top_content,height=8,bg=t["card_bg"],fg=t["text"],font=("Consolas",10),
                                       wrap="word",borderwidth=0,highlightthickness=0)
-        self.txt_profile_log.pack(fill="both",expand=True,padx=10,pady=10)
+        self.txt_profile_log.pack(fill="both",expand=True,pady=(0,8))
         self.txt_profile_log.insert("1.0","Pronto. Informe username e clique Analisar. O gerador usa a estética perfeita (dark tokyonight + summary-cards + snake picture) e analisa seu README antigo se existir.\n")
 
-        row=ctk.CTkFrame(f, fg_color="transparent"); row.pack(fill="x",pady=(0,8))
-        ctk.CTkLabel(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",
-                     font=ctk.CTkFont(size=10),text_color=t["text_dim"],wraplength=1100,justify="left",anchor="w").pack(side="left")
+        ctk.CTkLabel(top_content,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",
+                     font=ctk.CTkFont(size=10),text_color=t["text_dim"],wraplength=1100,justify="left",anchor="w").pack(fill="x")
 
         # Repositórios
         card_repos, content_repos = card(f, "Repositórios — selecione com ⭐ para reformular README")
