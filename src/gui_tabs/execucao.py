@@ -38,8 +38,14 @@ class ExecucaoTabMixin:
         log_frame=ctk.CTkFrame(log_outer, fg_color="transparent")
         log_frame.pack(fill="both",expand=True,padx=10,pady=10)
         self.log_text=tk.Text(log_frame,height=18,wrap="word",bg=t["card_bg"],fg=t["text"],
-                               insertbackground=t["text"],borderwidth=0,highlightthickness=0,font=("Consolas",9))
+                               insertbackground=t["text"],borderwidth=0,highlightthickness=0,font=("Consolas",11))
         self.log_text.pack(side="left",fill="both",expand=True)
+        # cores no log: verde quando algo termina bem, vermelho em erro/parada, azul nos
+        # separadores "=== ... ===" - só pra dar sinal visual rápido sem precisar ler o texto
+        # todo (pedido explícito: log muito "monocromático" antes).
+        self.log_text.tag_configure("ok", foreground=t["success"])
+        self.log_text.tag_configure("err", foreground=t["danger"])
+        self.log_text.tag_configure("info", foreground=t["primary"])
         sb=ttk.Scrollbar(log_frame,orient="vertical",command=self.log_text.yview)
         sb.pack(side="right",fill="y"); self.log_text.configure(yscrollcommand=sb.set)
         self.log=type("o",(),{"text":self.log_text})()
@@ -76,9 +82,20 @@ class ExecucaoTabMixin:
         while True:
             try: msg=self._log_queue.get_nowait()
             except queue.Empty: break
-            self.log.text.insert(tk.END,msg+("\n" if not msg.endswith("\n") else "")); updated=True
+            text=msg+("\n" if not msg.endswith("\n") else "")
+            for line in text.splitlines(keepends=True):
+                tag=self._log_tag_for(line)
+                if tag: self.log.text.insert(tk.END, line, tag)
+                else: self.log.text.insert(tk.END, line)
+            updated=True
         if updated: self.log.text.see(tk.END)
         self.after(80, self._drain_log_queue)
+    def _log_tag_for(self, line):
+        low=line.lower()
+        if "===" in line: return "info"
+        if any(k in low for k in ("[erro]","erro:","falhou","parado","authwall","exception")): return "err"
+        if any(k in low for k in ("finalizado","concluíd","✓","sucesso")): return "ok"
+        return None
     def _open_folder(self,p):
         try:
             if sys.platform.startswith("win"): os.startfile(str(p))

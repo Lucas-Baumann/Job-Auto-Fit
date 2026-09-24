@@ -8,7 +8,7 @@ import customtkinter as ctk
 from config import Config
 from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon, card, field,
+    OUTCOME_OPTIONS, Tooltip, info_icon, card, field, make_scrollable,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -24,7 +24,9 @@ class IATabMixin:
     def _build_ia(self):
         f=self.tab_ia
         t=get_active_theme()
-        outer, content = card(f, "Provedor IA (gratuito ou pago) — campo OPCIONAL")
+        inner=make_scrollable(f)
+        inner.pack(fill="both", expand=True)
+        outer, content = card(inner, "Provedor IA (gratuito ou pago) — campo OPCIONAL")
         outer.pack(fill="x", pady=(0,10))
         row_prov=ctk.CTkFrame(content, fg_color="transparent"); row_prov.pack(fill="x")
         ctk.CTkLabel(row_prov,text="Provedor",text_color=t["text_dim"]).pack(side="left",padx=(0,6))
@@ -115,7 +117,7 @@ class IATabMixin:
         self.var_llm_provider.trace_add("write", lambda *_: self._update_ai_state())
         self.after(300, self._update_ai_state)
 
-        outer, content2 = card(f, "E-mail SMTP (envio automático, opcional)")
+        outer, content2 = card(inner, "E-mail SMTP (envio automático, opcional)")
         outer.pack(fill="x", pady=(0,10))
         hdr2=ctk.CTkFrame(content2, fg_color="transparent"); hdr2.pack(fill="x")
         ctk.CTkLabel(hdr2,text="Envia currículos automaticamente por e-mail quando a vaga divulga e-mail de contato",
@@ -130,7 +132,7 @@ class IATabMixin:
         ctk.CTkLabel(content2,text="Se vazio, não envia e-mail — apenas gera PDFs.",font=ctk.CTkFont(size=10),
                      text_color=t["text_dim"]).pack(anchor="w", pady=(6,0))
 
-        outer, content3 = card(f, "LinkedIn / Gupy (automação navegador, opcional)")
+        outer, content3 = card(inner, "LinkedIn / Gupy (automação navegador, opcional)")
         outer.pack(fill="x", pady=(0,10))
         hdr3=ctk.CTkFrame(content3, fg_color="transparent"); hdr3.pack(fill="x")
         ctk.CTkLabel(hdr3,text="Login feito num navegador real — o app nunca vê nem guarda sua senha, só a sessão",

@@ -8,7 +8,7 @@ import customtkinter as ctk
 from config import Config
 from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon, card, field,
+    OUTCOME_OPTIONS, Tooltip, info_icon, card, field, make_scrollable,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -18,7 +18,9 @@ class PerfilTabMixin:
     def _build_perfil(self):
         f=self.tab_perfil
         t=get_active_theme()
-        outer, grid = card(f, "Dados Pessoais")
+        inner=make_scrollable(f)
+        inner.pack(fill="both", expand=True)
+        outer, grid = card(inner, "Dados Pessoais")
         outer.pack(fill="x", pady=(0,10))
         for c in range(2): grid.columnconfigure(c, weight=1)
         w,_=field(grid,"Nome completo",lambda p: ctk.CTkEntry(p,textvariable=self.var_name)); w.grid(row=0,column=0,columnspan=2,sticky="ew",pady=4)
@@ -31,13 +33,13 @@ class PerfilTabMixin:
         ctk.CTkButton(btn_wrap,text="Importar PDF/DOCX/TXT",fg_color="transparent",border_width=1,border_color=t["primary"],
                       text_color=t["primary"],hover_color=t["card_bg"],command=self.import_cv_file).pack(side="bottom",fill="x")
 
-        outer, content = card(f, "Resumo Profissional (IA reescreve mantendo contexto)")
+        outer, content = card(inner, "Resumo Profissional (IA reescreve mantendo contexto)")
         outer.pack(fill="x", pady=(0,10))
         self.txt_summary=tk.Text(content,height=4,wrap="word",bg=t["window_bg"],fg=t["text"],
                                   insertbackground=t["text"],borderwidth=0,highlightthickness=0)
         self.txt_summary.pack(fill="x"); self.txt_summary.insert("1.0",self.curriculum.get("summary",""))
 
-        cols=ctk.CTkFrame(f, fg_color="transparent"); cols.pack(fill="both",expand=True)
+        cols=ctk.CTkFrame(inner, fg_color="transparent"); cols.pack(fill="both",expand=True)
         for i in range(3): cols.columnconfigure(i,weight=1)
         self.card_skills, content_skills = card(cols, "Skills (ATS)")
         self.card_skills.grid(row=0,column=0,sticky="nsew",padx=(0,6))

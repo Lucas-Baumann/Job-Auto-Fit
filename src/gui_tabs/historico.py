@@ -18,13 +18,15 @@ class HistoricoTabMixin:
     def _build_hist(self):
         f=self.tab_hist
         t=style_ttk()
-        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x",pady=(0,8))
-        ctk.CTkLabel(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
-                     text_color=t["text_dim"],wraplength=900,justify="left",anchor="w").pack(side="left")
+        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x")
         ctk.CTkButton(top,text="🗑 Limpar Histórico",width=140,fg_color="transparent",border_width=1,border_color=t["danger"],
                       text_color=t["danger"],hover_color=t["card_bg"],command=self.clear_history).pack(side="right")
         ctk.CTkButton(top,text="Atualizar",width=100,fg_color="transparent",border_width=1,border_color=t["border"],
                       text_color=t["text"],hover_color=t["card_bg"],command=self._refresh_hist).pack(side="right",padx=(0,8))
+        # legenda em linha própria (não inline com os botões) - competindo por espaço com os
+        # 2 botões nessa mesma fileira, o texto comprido ficava espremido/cortado.
+        ctk.CTkLabel(f,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
+                     text_color=t["text_dim"],justify="left",anchor="w").pack(fill="x",pady=(4,8))
 
         actions=ctk.CTkFrame(f, fg_color="transparent"); actions.pack(fill="x",pady=(0,8))
         self.btn_approve_send=ctk.CTkButton(actions,text="✔ Aprovar e Enviar (selecionada)",fg_color=t["success"],

@@ -7,7 +7,7 @@ import customtkinter as ctk
 from config import Config
 from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon, card, field, CTkSpinbox,
+    OUTCOME_OPTIONS, Tooltip, info_icon, card, field, CTkSpinbox, make_scrollable,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -17,9 +17,7 @@ class BuscaTabMixin:
     def _build_busca(self):
         f=self.tab_busca
         t=get_active_theme()
-        # CTkScrollableFrame ja resolve scroll (roda do mouse incluida) - substitui o canvas
-        # + scrollbar manual de antes (precisava de bind_all pra roda do mouse funcionar).
-        inner=ctk.CTkScrollableFrame(f, fg_color="transparent")
+        inner=make_scrollable(f)
         inner.pack(fill="both", expand=True)
 
         outer, content = card(inner, "Palavras-chave (vírgula)")
@@ -30,20 +28,22 @@ class BuscaTabMixin:
 
         outer, grid = card(inner, "Filtros de Busca")
         outer.pack(fill="x", pady=(0,10))
-        for c in range(2): grid.columnconfigure(c, weight=1)
+        # 4 colunas (era 2x4) - mesma informação em metade das linhas, ocupando bem menos
+        # altura vertical (o card ficava grande demais pro pouco que mostra).
+        for c in range(4): grid.columnconfigure(c, weight=1)
         _cb = lambda values, var, cmd=None: (lambda p: ctk.CTkComboBox(
             p, variable=var, values=values, state="readonly", command=(lambda _v: cmd()) if cmd else None))
         w,_=field(grid,"Regime",_cb(["remoto","presencial","hibrido","indiferente"],self.var_work_mode,self._bind_work_mode)); w.grid(row=0,column=0,sticky="ew",padx=(0,8),pady=6)
-        w,_=field(grid,"Contrato",_cb(["clt","pj","indiferente"],self.var_contract)); w.grid(row=0,column=1,sticky="ew",pady=6)
+        w,_=field(grid,"Contrato",_cb(["clt","pj","indiferente"],self.var_contract)); w.grid(row=0,column=1,sticky="ew",padx=(0,8),pady=6)
         w,_=field(grid,"Nível",_cb(["indiferente","estagio","junior","pleno","senior"],self.var_level),
-                   tooltip="Filtra por senioridade no título/descrição.\nIndiferente = não filtra"); w.grid(row=1,column=0,sticky="ew",padx=(0,8),pady=6)
-        w,_=field(grid,"Inglês",_cb(["indiferente","sim","nao"],self.var_english)); w.grid(row=1,column=1,sticky="ew",pady=6)
-        w,_=field(grid,"Salário mínimo (R$)",lambda p: CTkSpinbox(p,from_=0,to=50000,textvariable=self.var_min_salary,increment=500),
-                   tooltip="Extrai R$ do texto da vaga. Se não achar salário, não filtra."); w.grid(row=2,column=0,sticky="ew",padx=(0,8),pady=6)
-        w,_=field(grid,"Idade max vaga (dias, 0=ignorar)",lambda p: CTkSpinbox(p,from_=0,to=60,textvariable=self.var_max_age)); w.grid(row=2,column=1,sticky="ew",pady=6)
-        w,_=field(grid,"Limite diário envios",lambda p: CTkSpinbox(p,from_=1,to=100,textvariable=self.var_daily_limit),
-                   tooltip="Máximo de CANDIDATURAS ENVIADAS de verdade por dia (automático ou aprovado manualmente no Histórico) — não limita quantas vagas são buscadas/pontuadas, só o disparo real de Playwright/SMTP.\n>30 = alto risco de softban no LinkedIn (erro 999/429, IP bloqueado 15min-24h).\nRecomendado: 15-20."); w.grid(row=3,column=0,sticky="ew",padx=(0,8),pady=6)
-        pcd_wrap=ctk.CTkFrame(grid, fg_color="transparent"); pcd_wrap.grid(row=3,column=1,sticky="ew",pady=6)
+                   tooltip="Filtra por senioridade no título/descrição.\nIndiferente = não filtra"); w.grid(row=0,column=2,sticky="ew",padx=(0,8),pady=6)
+        w,_=field(grid,"Inglês",_cb(["indiferente","sim","nao"],self.var_english)); w.grid(row=0,column=3,sticky="ew",pady=6)
+        w,_=field(grid,"Salário mínimo (R$)",lambda p: CTkSpinbox(p,from_=0,to=50000,textvariable=self.var_min_salary,increment=500,width=110),
+                   tooltip="Extrai R$ do texto da vaga. Se não achar salário, não filtra."); w.grid(row=1,column=0,sticky="ew",padx=(0,8),pady=6)
+        w,_=field(grid,"Idade max (dias, 0=ignora)",lambda p: CTkSpinbox(p,from_=0,to=60,textvariable=self.var_max_age,width=110)); w.grid(row=1,column=1,sticky="ew",padx=(0,8),pady=6)
+        w,_=field(grid,"Limite diário envios",lambda p: CTkSpinbox(p,from_=1,to=100,textvariable=self.var_daily_limit,width=110),
+                   tooltip="Máximo de CANDIDATURAS ENVIADAS de verdade por dia (automático ou aprovado manualmente no Histórico) — não limita quantas vagas são buscadas/pontuadas, só o disparo real de Playwright/SMTP.\n>30 = alto risco de softban no LinkedIn (erro 999/429, IP bloqueado 15min-24h).\nRecomendado: 15-20."); w.grid(row=1,column=2,sticky="ew",padx=(0,8),pady=6)
+        pcd_wrap=ctk.CTkFrame(grid, fg_color="transparent"); pcd_wrap.grid(row=1,column=3,sticky="ew",pady=6)
         ctk.CTkCheckBox(pcd_wrap,text="Apenas vagas PCD",variable=self.var_only_pcd).pack(side="left")
         info_icon(pcd_wrap, "Só passa vaga com 'PCD'/'pessoa com deficiência' no texto").pack(side="left")
 

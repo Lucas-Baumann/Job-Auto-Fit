@@ -2,16 +2,23 @@ import json, os, sys, threading, subprocess, webbrowser, re
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
+import customtkinter as ctk
 
 from config import Config, resource_path
+from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon,
+    OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
+
+# Bump global de 12% no tamanho de widgets/fonte do CustomTkinter (afeta entry/combobox/
+# botão/label igual, dimensão e fonte juntas) - texto dos campos ficava pequeno/pouco
+# legível no tamanho padrão. Precisa rodar antes de qualquer widget CTk ser criado.
+ctk.set_widget_scaling(1.12)
 from gui_tabs.perfil import PerfilTabMixin
 from gui_tabs.busca import BuscaTabMixin
 from gui_tabs.ia import IATabMixin
@@ -35,7 +42,13 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
             self.iconbitmap(default=str(resource_path("icon_taskbar.ico")))
         except Exception:
             pass
-        self.geometry("1280x820"); self.minsize(1200,750)
+        self.minsize(1200,750)
+        # centraliza na tela - antes sempre abria no canto superior esquerdo (posição
+        # default do SO), independente do tamanho/resolução do monitor.
+        _w,_h=1280,820
+        self.update_idletasks()
+        _x=(self.winfo_screenwidth()-_w)//2; _y=(self.winfo_screenheight()-_h)//2
+        self.geometry(f"{_w}x{_h}+{max(0,_x)}+{max(0,_y)}")
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
         try:
             # garante que jobs.db exista com o schema atual (colunas/tabelas novas) antes de
@@ -133,20 +146,42 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         )
 
     def _build_ui(self):
-        top=tb.Frame(self,padding=10); top.pack(fill=X)
-        tb.Label(top,text="VampHunter",font=("Segoe UI",18,"bold"),bootstyle="primary").pack(side=LEFT)
-        tb.Label(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",font=("Segoe UI",10),bootstyle="light").pack(side=LEFT,padx=10)
-        tb.Button(top,text="Exportar",bootstyle="secondary-outline",command=self.export_config).pack(side=RIGHT,padx=5)
-        tb.Button(top,text="Importar",bootstyle="secondary-outline",command=self.import_config).pack(side=RIGHT,padx=5)
-        self.nb=tb.Notebook(self,bootstyle="dark"); self.nb.pack(fill=BOTH,expand=True,padx=10,pady=(0,10))
-        self.tab_perfil=tb.Frame(self.nb,padding=10); self.tab_busca=tb.Frame(self.nb,padding=10); self.tab_ia=tb.Frame(self.nb,padding=10); self.tab_exec=tb.Frame(self.nb,padding=10); self.tab_dash=tb.Frame(self.nb,padding=10); self.tab_hist=tb.Frame(self.nb,padding=10); self.tab_profile=tb.Frame(self.nb,padding=10)
+        t=style_ttk()
+        # janela toda (tb.Window/"darkly") fica em cima do fundo escuro do ttkbootstrap, que
+        # não é exatamente a cor de theme.py - força o mesmo window_bg pra não ter costura de
+        # cor entre o fundo da janela e os cards CustomTkinter por cima.
+        self.configure(bg=t["window_bg"])
+
+        top=ctk.CTkFrame(self, fg_color=t["window_bg"]); top.pack(fill="x", padx=10, pady=10)
+        ctk.CTkLabel(top,text="VampHunter",font=ctk.CTkFont(size=20,weight="bold"),text_color=t["primary"]).pack(side="left")
+        ctk.CTkLabel(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",
+                     font=ctk.CTkFont(size=12),text_color=t["text_dim"]).pack(side="left",padx=10)
+        ctk.CTkButton(top,text="Exportar",width=90,fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=self.export_config).pack(side="right",padx=(6,0))
+        ctk.CTkButton(top,text="Importar",width=90,fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=self.import_config).pack(side="right")
+
+        self.nb=ttk.Notebook(self, style="Vamp.TNotebook"); self.nb.pack(fill="both",expand=True,padx=10,pady=(0,10))
+        self.tab_perfil=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_busca=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_ia=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_exec=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_dash=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_hist=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
+        self.tab_profile=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
         self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico "); self.nb.add(self.tab_profile,text=" 7. Perfil GitHub ")
         self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist(); self._build_profile()
-        bottom=tb.Frame(self,padding=(10,0,10,10)); bottom.pack(fill=X)
-        tb.Button(bottom,text="Salvar Tudo",bootstyle="success",command=self.save_all).pack(side=LEFT)
-        tb.Label(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",bootstyle="light",font=("Segoe UI",8)).pack(side=LEFT,padx=12)
-        tb.Button(bottom,text="Abrir Relatórios",bootstyle="info-outline",command=lambda:self._open_folder(BASE_DIR/"reports")).pack(side=RIGHT,padx=5)
-        tb.Button(bottom,text="Preview PDF",bootstyle="info",command=self.preview_pdf).pack(side=RIGHT)
+
+        bottom=ctk.CTkFrame(self, fg_color=t["window_bg"]); bottom.pack(fill="x", padx=10, pady=(0,10))
+        ctk.CTkButton(bottom,text="Salvar Tudo",width=120,fg_color=t["success"],hover_color=t["border"],
+                      command=self.save_all).pack(side="left")
+        ctk.CTkLabel(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",
+                     font=ctk.CTkFont(size=10),text_color=t["text_dim"]).pack(side="left",padx=12)
+        ctk.CTkButton(bottom,text="Preview PDF",width=110,fg_color=t["primary"],hover_color=t["border"],
+                      command=self.preview_pdf).pack(side="right")
+        ctk.CTkButton(bottom,text="Abrir Relatórios",width=130,fg_color="transparent",border_width=1,border_color=t["primary"],
+                      text_color=t["primary"],hover_color=t["card_bg"],
+                      command=lambda:self._open_folder(BASE_DIR/"reports")).pack(side="right",padx=(0,8))
 
     # Perfil (com import)
     def save_all(self,silent=False):

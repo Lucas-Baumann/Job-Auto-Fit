@@ -120,7 +120,37 @@ def style_ttk(theme=None):
     style.map("Vamp.Treeview.Heading", background=[("active", t["border"])])
     style.configure("Vamp.Horizontal.TProgressbar", background=t["primary"], troughcolor=t["card_bg"],
                      bordercolor=t["border"], lightcolor=t["primary"], darkcolor=t["primary"])
+    style.configure("Vamp.TFrame", background=t["window_bg"])
+    style.configure("Vamp.TNotebook", background=t["window_bg"], borderwidth=0)
+    style.configure("Vamp.TNotebook.Tab", background=t["card_bg"], foreground=t["text_dim"],
+                     padding=(14,8), borderwidth=0, focuscolor=t["window_bg"])
+    style.map("Vamp.TNotebook.Tab", background=[("selected", t["primary"])],
+              foreground=[("selected", "#ffffff")])
     return t
+
+def make_scrollable(parent, fg_color="transparent"):
+    """CTkScrollableFrame com scroll do mouse mais robusto. O binding embutido do
+    CustomTkinter divide o delta do evento por 6 (`-int(event.delta/6)`) - num mouse comum
+    (delta=±120) isso dá 1 unidade tranquilo, mas touchpads precision do Windows mandam
+    deltas bem menores por evento (scroll suave), que às vezes zeram nessa divisão e dão a
+    impressão de 'o scroll não funciona'. Aqui a rolagem usa um passo fixo (só olha o sinal
+    do delta, não a magnitude), então qualquer evento sempre move visivelmente. Reaproveita
+    o _check_if_valid_scroll() nativo do CTkScrollableFrame pra só rolar quando o widget sob
+    o mouse pertence de fato a este frame (necessário já que várias abas têm cada uma o seu)."""
+    sf = ctk.CTkScrollableFrame(parent, fg_color=fg_color)
+    canvas = sf._parent_canvas
+    def _on_wheel(event):
+        if not sf._check_if_valid_scroll(event.widget): return
+        num = getattr(event, "num", None)
+        if num in (4,5):
+            step = -3 if num == 4 else 3
+        else:
+            step = -3 if getattr(event, "delta", 0) > 0 else 3
+        canvas.yview_scroll(step, "units")
+    canvas.bind_all("<MouseWheel>", _on_wheel, add="+")
+    canvas.bind_all("<Button-4>", _on_wheel, add="+")
+    canvas.bind_all("<Button-5>", _on_wheel, add="+")
+    return sf
 
 # BASE_DIR vem de Config (mesma detecção de .exe/_MEIPASS usada no resto do projeto) — antes a
 # GUI calculava seu próprio BASE_DIR sem essa lógica e ficava com caminhos errados (apontando
