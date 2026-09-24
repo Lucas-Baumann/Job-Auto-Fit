@@ -2,13 +2,13 @@ import json, os, sys, threading, subprocess, webbrowser, re, queue
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+from tkinter import filedialog, messagebox, ttk
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon,
+    OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -17,14 +17,31 @@ class ExecucaoTabMixin:
     """Aba 4 - Execucao: roda o pipeline completo, log em tempo real, preview de PDF."""
     def _build_exec(self):
         f=self.tab_exec
-        top=tb.Frame(f); top.pack(fill=X,pady=5)
-        tb.Checkbutton(top,text="dry-run (só PDFs + relatório)",variable=self.var_dry_run,bootstyle="round-toggle").pack(side=LEFT,padx=5)
-        self.btn_run=tb.Button(top,text="▶ Iniciar Automação",bootstyle="success",width=20,command=self.run_automation); self.btn_run.pack(side=RIGHT,padx=5)
-        self.btn_stop=tb.Button(top,text="■ Parar",bootstyle="danger-outline",command=self.stop_automation,state=DISABLED); self.btn_stop.pack(side=RIGHT,padx=5)
-        self.progress=tb.Progressbar(f,mode="indeterminate",bootstyle="success-striped"); self.progress.pack(fill=X,pady=6)
-        log_frame=tb.Frame(f); log_frame.pack(fill=BOTH,expand=True,pady=5)
-        self.log_text=tk.Text(log_frame,height=18,wrap="word",bg="#0f0f0f",fg="#d0d0d0",insertbackground="white",font=("Consolas",9)); self.log_text.pack(side=LEFT,fill=BOTH,expand=True)
-        sb=tb.Scrollbar(log_frame,orient=VERTICAL,command=self.log_text.yview); sb.pack(side=RIGHT,fill=Y); self.log_text.configure(yscrollcommand=sb.set)
+        t=style_ttk()
+
+        top=ctk.CTkFrame(f, fg_color="transparent")
+        top.pack(fill="x", pady=(0,10))
+        ctk.CTkCheckBox(top,text="dry-run (só PDFs + relatório)",variable=self.var_dry_run).pack(side="left")
+        self.btn_run=ctk.CTkButton(top,text="▶ Iniciar Automação",width=180,fg_color=t["success"],
+                                    hover_color=t["border"],command=self.run_automation)
+        self.btn_run.pack(side="right")
+        self.btn_stop=ctk.CTkButton(top,text="■ Parar",width=100,fg_color="transparent",border_width=1,
+                                     border_color=t["danger"],text_color=t["danger"],hover_color=t["card_bg"],
+                                     state="disabled",command=self.stop_automation)
+        self.btn_stop.pack(side="right",padx=(0,8))
+
+        self.progress=ttk.Progressbar(f,mode="indeterminate",style="Vamp.Horizontal.TProgressbar")
+        self.progress.pack(fill="x",pady=(0,10))
+
+        log_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        log_outer.pack(fill="both",expand=True,pady=(0,10))
+        log_frame=ctk.CTkFrame(log_outer, fg_color="transparent")
+        log_frame.pack(fill="both",expand=True,padx=10,pady=10)
+        self.log_text=tk.Text(log_frame,height=18,wrap="word",bg=t["card_bg"],fg=t["text"],
+                               insertbackground=t["text"],borderwidth=0,highlightthickness=0,font=("Consolas",9))
+        self.log_text.pack(side="left",fill="both",expand=True)
+        sb=ttk.Scrollbar(log_frame,orient="vertical",command=self.log_text.yview)
+        sb.pack(side="right",fill="y"); self.log_text.configure(yscrollcommand=sb.set)
         self.log=type("o",(),{"text":self.log_text})()
         # Tkinter não é thread-safe: mexer no Text direto de uma thread em background (o
         # pipeline roda numa) já causou o app travar (ex: ao clicar 'Abrir último HTML' logo
@@ -34,12 +51,22 @@ class ExecucaoTabMixin:
         self._log_queue=queue.Queue()
         self._log("Pronto. Clique em Iniciar.\n")
         self.after(80, self._drain_log_queue)
-        row=tb.Frame(f); row.pack(fill=X,pady=5)
-        tb.Button(row,text="Abrir último HTML",bootstyle="info",command=self.open_last_report).pack(side=LEFT,padx=5)
-        tb.Button(row,text="Pasta OUTPUT",bootstyle="secondary",command=lambda:self._open_folder(BASE_DIR/"output")).pack(side=LEFT,padx=5)
-        self.btn_preview_ai=tb.Button(row,text="Preview ATS c/ IA (reestrutura)",bootstyle="warning-outline",command=self.preview_pdf); self.btn_preview_ai.pack(side=LEFT,padx=5)
-        tb.Button(row,text="Limpar log",bootstyle="secondary-outline",command=lambda:self.log.text.delete("1.0",tk.END)).pack(side=RIGHT)
-        self.lbl_exec_ai=tb.Label(f,text="",font=("Segoe UI",8)); self.lbl_exec_ai.pack(anchor=W, pady=(2,0))
+
+        row=ctk.CTkFrame(f, fg_color="transparent")
+        row.pack(fill="x")
+        ctk.CTkButton(row,text="Abrir último HTML",width=140,command=self.open_last_report).pack(side="left",padx=(0,8))
+        ctk.CTkButton(row,text="Pasta OUTPUT",width=120,fg_color="transparent",border_width=1,
+                      border_color=t["border"],text_color=t["text"],hover_color=t["card_bg"],
+                      command=lambda:self._open_folder(BASE_DIR/"output")).pack(side="left",padx=(0,8))
+        self.btn_preview_ai=ctk.CTkButton(row,text="Preview ATS c/ IA (reestrutura)",width=200,fg_color="transparent",
+                                           border_width=1,border_color=t["primary"],text_color=t["primary"],
+                                           hover_color=t["card_bg"],command=self.preview_pdf)
+        self.btn_preview_ai.pack(side="left",padx=(0,8))
+        ctk.CTkButton(row,text="Limpar log",width=100,fg_color="transparent",border_width=1,
+                      border_color=t["border"],text_color=t["text_dim"],hover_color=t["card_bg"],
+                      command=lambda:self.log.text.delete("1.0",tk.END)).pack(side="right")
+        self.lbl_exec_ai=ctk.CTkLabel(f,text="",font=ctk.CTkFont(size=11),text_color=t["text_dim"],anchor="w")
+        self.lbl_exec_ai.pack(fill="x", pady=(6,0))
     def _log(self,msg):
         """Thread-safe: pode ser chamado tanto do thread principal quanto da thread do
         pipeline em background — só enfileira, nunca toca o widget diretamente."""
@@ -76,7 +103,7 @@ class ExecucaoTabMixin:
             # específica no log, sem entender de onde veio. Agora bloqueia igual à validação
             # de nome acima, em vez de inventar uma palavra-chave que ninguém pediu.
             messagebox.showwarning("Validação","Informe ao menos uma palavra-chave de busca"); self.nb.select(self.tab_busca); return
-        self.save_all(silent=True); self.btn_run.config(state=DISABLED); self.progress.start(12); self._log("\n=== Iniciando ===")
+        self.save_all(silent=True); self.btn_run.configure(state="disabled"); self.progress.start(12); self._log("\n=== Iniciando ===")
         loc="Brasil" if self.var_work_mode.get()=="remoto" else (self.var_presencial_loc.get().strip() or "Brasil")
         min_score=int(self.var_min_score.get()); dry_run=bool(self.var_dry_run.get())
         self.proc=None; self.stop_requested=False
@@ -84,7 +111,7 @@ class ExecucaoTabMixin:
         # roda o pipeline no mesmo processo. "Parar" então não mata um processo externo: usa
         # o should_stop de run_pipeline, então não é instantâneo (termina a vaga em andamento).
         frozen=bool(getattr(sys,'frozen',False))
-        self.btn_stop.config(state=NORMAL)
+        self.btn_stop.configure(state="normal")
         def target():
             try:
                 if frozen:
@@ -119,13 +146,13 @@ class ExecucaoTabMixin:
                 # mesma razão do _log: essas chamadas mexem em widgets Tk e o botão/progress
                 # são widgets também — precisam rodar no thread principal, não aqui.
                 def _finish():
-                    self.progress.stop(); self.btn_run.config(state=NORMAL); self.btn_stop.config(state=DISABLED)
+                    self.progress.stop(); self.btn_run.configure(state="normal"); self.btn_stop.configure(state="disabled")
                     self._refresh_hist(); self._refresh_dashboard()
                 self.after(0, _finish)
         threading.Thread(target=target,daemon=True).start()
     def stop_automation(self):
         self.stop_requested=True
-        self.btn_stop.config(state=DISABLED)
+        self.btn_stop.configure(state="disabled")
         try: self.proc.terminate()
         except: pass
         self._log("[Stop] Parada solicitada — aguardando terminar a keyword/vaga em andamento (não é instantâneo).")

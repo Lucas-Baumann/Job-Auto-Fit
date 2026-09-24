@@ -3,12 +3,12 @@ from pathlib import Path
 from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon,
+    OUTCOME_OPTIONS, Tooltip, info_icon, card, field,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -17,33 +17,59 @@ class PerfilTabMixin:
     """Aba 1 - Curriculo: dados pessoais, resumo, skills, experiencias, formacao, import de PDF/DOCX/TXT."""
     def _build_perfil(self):
         f=self.tab_perfil
-        card=tb.Labelframe(f,text="Dados Pessoais",padding=10,bootstyle="info"); card.pack(fill=X,pady=5)
-        grid=tb.Frame(card); grid.pack(fill=X)
-        for c in range(4): grid.columnconfigure(c,weight=1)
-        tb.Label(grid,text="Nome completo").grid(row=0,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_name).grid(row=0,column=1,sticky=EW,padx=5,pady=3,columnspan=3)
-        tb.Label(grid,text="E-mail").grid(row=1,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_email).grid(row=1,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(grid,text="Telefone").grid(row=1,column=2,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_phone).grid(row=1,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(grid,text="Localização").grid(row=2,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_location).grid(row=2,column=1,sticky=EW,padx=5,pady=3)
-        tb.Label(grid,text="LinkedIn URL").grid(row=2,column=2,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_linkedin).grid(row=2,column=3,sticky=EW,padx=5,pady=3)
-        tb.Label(grid,text="GitHub / Portfólio").grid(row=3,column=0,sticky=W,padx=5,pady=3); tb.Entry(grid,textvariable=self.var_github).grid(row=3,column=1,sticky=EW,padx=5,pady=3,columnspan=2)
-        tb.Button(grid,text="Importar PDF/DOCX/TXT",bootstyle="warning-outline",command=self.import_cv_file).grid(row=3,column=3,padx=5,pady=3,sticky=EW)
-        card2=tb.Labelframe(f,text="Resumo Profissional (IA reescreve mantendo contexto)",padding=10,bootstyle="info"); card2.pack(fill=X,pady=5)
-        self.txt_summary=tk.Text(card2,height=4,wrap="word",bg="#2b2b2b",fg="#e0e0e0",insertbackground="white"); self.txt_summary.pack(fill=X); self.txt_summary.insert("1.0",self.curriculum.get("summary",""))
-        cols=tb.Frame(f); cols.pack(fill=BOTH,expand=True,pady=5)
+        t=get_active_theme()
+        outer, grid = card(f, "Dados Pessoais")
+        outer.pack(fill="x", pady=(0,10))
+        for c in range(2): grid.columnconfigure(c, weight=1)
+        w,_=field(grid,"Nome completo",lambda p: ctk.CTkEntry(p,textvariable=self.var_name)); w.grid(row=0,column=0,columnspan=2,sticky="ew",pady=4)
+        w,_=field(grid,"E-mail",lambda p: ctk.CTkEntry(p,textvariable=self.var_email)); w.grid(row=1,column=0,sticky="ew",padx=(0,8),pady=4)
+        w,_=field(grid,"Telefone",lambda p: ctk.CTkEntry(p,textvariable=self.var_phone)); w.grid(row=1,column=1,sticky="ew",pady=4)
+        w,_=field(grid,"Localização",lambda p: ctk.CTkEntry(p,textvariable=self.var_location)); w.grid(row=2,column=0,sticky="ew",padx=(0,8),pady=4)
+        w,_=field(grid,"LinkedIn URL",lambda p: ctk.CTkEntry(p,textvariable=self.var_linkedin)); w.grid(row=2,column=1,sticky="ew",pady=4)
+        w,_=field(grid,"GitHub / Portfólio",lambda p: ctk.CTkEntry(p,textvariable=self.var_github)); w.grid(row=3,column=0,sticky="ew",padx=(0,8),pady=4)
+        btn_wrap=ctk.CTkFrame(grid, fg_color="transparent"); btn_wrap.grid(row=3,column=1,sticky="ews",pady=4)
+        ctk.CTkButton(btn_wrap,text="Importar PDF/DOCX/TXT",fg_color="transparent",border_width=1,border_color=t["primary"],
+                      text_color=t["primary"],hover_color=t["card_bg"],command=self.import_cv_file).pack(side="bottom",fill="x")
+
+        outer, content = card(f, "Resumo Profissional (IA reescreve mantendo contexto)")
+        outer.pack(fill="x", pady=(0,10))
+        self.txt_summary=tk.Text(content,height=4,wrap="word",bg=t["window_bg"],fg=t["text"],
+                                  insertbackground=t["text"],borderwidth=0,highlightthickness=0)
+        self.txt_summary.pack(fill="x"); self.txt_summary.insert("1.0",self.curriculum.get("summary",""))
+
+        cols=ctk.CTkFrame(f, fg_color="transparent"); cols.pack(fill="both",expand=True)
         for i in range(3): cols.columnconfigure(i,weight=1)
-        self.card_skills=tb.Labelframe(cols,text="Skills (ATS)",padding=8,bootstyle="success"); self.card_skills.grid(row=0,column=0,sticky=NSEW,padx=5)
-        self.lst_skills=tk.Listbox(self.card_skills,height=8,bg="#1e1e1e",fg="white"); self.lst_skills.pack(fill=BOTH,expand=True)
-        row=tb.Frame(self.card_skills); row.pack(fill=X,pady=4)
-        self.ent_skill=tb.Entry(row); self.ent_skill.pack(side=LEFT,fill=X,expand=True,padx=(0,5)); self.ent_skill.bind("<Return>",lambda e:self.add_skill())
-        tb.Button(row,text="+",width=4,bootstyle="success",command=self.add_skill).pack(side=LEFT); tb.Button(row,text="–",width=4,bootstyle="danger-outline",command=self.del_skill).pack(side=LEFT,padx=2)
-        self.card_exp=tb.Labelframe(cols,text="Experiências",padding=8,bootstyle="warning"); self.card_exp.grid(row=0,column=1,sticky=NSEW,padx=5)
-        self.lst_exp=tk.Listbox(self.card_exp,height=8,bg="#1e1e1e",fg="white"); self.lst_exp.pack(fill=BOTH,expand=True); self.lst_exp.bind("<Double-Button-1>",lambda e:self.edit_exp())
-        btns=tb.Frame(self.card_exp); btns.pack(fill=X,pady=4)
-        tb.Button(btns,text="Adicionar",bootstyle="warning",command=self.add_exp).pack(side=LEFT,fill=X,expand=True,padx=1); tb.Button(btns,text="Editar",bootstyle="secondary",command=self.edit_exp).pack(side=LEFT,fill=X,expand=True,padx=1); tb.Button(btns,text="Remover",bootstyle="danger-outline",command=self.del_exp).pack(side=LEFT,fill=X,expand=True,padx=1)
-        self.card_edu=tb.Labelframe(cols,text="Formação",padding=8,bootstyle="info"); self.card_edu.grid(row=0,column=2,sticky=NSEW,padx=5)
-        self.lst_edu=tk.Listbox(self.card_edu,height=8,bg="#1e1e1e",fg="white"); self.lst_edu.pack(fill=BOTH,expand=True); self.lst_edu.bind("<Double-Button-1>",lambda e:self.edit_edu())
-        btns2=tb.Frame(self.card_edu); btns2.pack(fill=X,pady=4)
-        tb.Button(btns2,text="Adicionar",bootstyle="info",command=self.add_edu).pack(side=LEFT,fill=X,expand=True,padx=1); tb.Button(btns2,text="Editar",bootstyle="secondary",command=self.edit_edu).pack(side=LEFT,fill=X,expand=True,padx=1); tb.Button(btns2,text="Remover",bootstyle="danger-outline",command=self.del_edu).pack(side=LEFT,fill=X,expand=True,padx=1)
+        self.card_skills, content_skills = card(cols, "Skills (ATS)")
+        self.card_skills.grid(row=0,column=0,sticky="nsew",padx=(0,6))
+        self.lst_skills=tk.Listbox(content_skills,height=8,bg=t["window_bg"],fg=t["text"],borderwidth=0,highlightthickness=0)
+        self.lst_skills.pack(fill="both",expand=True)
+        row=ctk.CTkFrame(content_skills, fg_color="transparent"); row.pack(fill="x",pady=(6,0))
+        self.ent_skill=ctk.CTkEntry(row); self.ent_skill.pack(side="left",fill="x",expand=True,padx=(0,6)); self.ent_skill.bind("<Return>",lambda e:self.add_skill())
+        ctk.CTkButton(row,text="+",width=32,fg_color=t["success"],hover_color=t["border"],command=self.add_skill).pack(side="left")
+        ctk.CTkButton(row,text="–",width=32,fg_color="transparent",border_width=1,border_color=t["danger"],
+                      text_color=t["danger"],hover_color=t["card_bg"],command=self.del_skill).pack(side="left",padx=(4,0))
+
+        self.card_exp, content_exp = card(cols, "Experiências")
+        self.card_exp.grid(row=0,column=1,sticky="nsew",padx=6)
+        self.lst_exp=tk.Listbox(content_exp,height=8,bg=t["window_bg"],fg=t["text"],borderwidth=0,highlightthickness=0)
+        self.lst_exp.pack(fill="both",expand=True); self.lst_exp.bind("<Double-Button-1>",lambda e:self.edit_exp())
+        btns=ctk.CTkFrame(content_exp, fg_color="transparent"); btns.pack(fill="x",pady=(6,0))
+        ctk.CTkButton(btns,text="Adicionar",fg_color=t["primary"],hover_color=t["border"],command=self.add_exp).pack(side="left",fill="x",expand=True,padx=(0,3))
+        ctk.CTkButton(btns,text="Editar",fg_color="transparent",border_width=1,border_color=t["border"],text_color=t["text"],
+                      hover_color=t["window_bg"],command=self.edit_exp).pack(side="left",fill="x",expand=True,padx=3)
+        ctk.CTkButton(btns,text="Remover",fg_color="transparent",border_width=1,border_color=t["danger"],text_color=t["danger"],
+                      hover_color=t["window_bg"],command=self.del_exp).pack(side="left",fill="x",expand=True,padx=(3,0))
+
+        self.card_edu, content_edu = card(cols, "Formação")
+        self.card_edu.grid(row=0,column=2,sticky="nsew",padx=(6,0))
+        self.lst_edu=tk.Listbox(content_edu,height=8,bg=t["window_bg"],fg=t["text"],borderwidth=0,highlightthickness=0)
+        self.lst_edu.pack(fill="both",expand=True); self.lst_edu.bind("<Double-Button-1>",lambda e:self.edit_edu())
+        btns2=ctk.CTkFrame(content_edu, fg_color="transparent"); btns2.pack(fill="x",pady=(6,0))
+        ctk.CTkButton(btns2,text="Adicionar",fg_color=t["primary"],hover_color=t["border"],command=self.add_edu).pack(side="left",fill="x",expand=True,padx=(0,3))
+        ctk.CTkButton(btns2,text="Editar",fg_color="transparent",border_width=1,border_color=t["border"],text_color=t["text"],
+                      hover_color=t["window_bg"],command=self.edit_edu).pack(side="left",fill="x",expand=True,padx=3)
+        ctk.CTkButton(btns2,text="Remover",fg_color="transparent",border_width=1,border_color=t["danger"],text_color=t["danger"],
+                      hover_color=t["window_bg"],command=self.del_edu).pack(side="left",fill="x",expand=True,padx=(3,0))
     def _refresh_skills_list(self):
         self.lst_skills.delete(0,tk.END)
         for s in self.curriculum.get("skills",[]): self.lst_skills.insert(tk.END,s)
@@ -57,16 +83,18 @@ class PerfilTabMixin:
         self.lst_exp.delete(0,tk.END)
         for e in self.curriculum.get("experiences",[]): self.lst_exp.insert(tk.END,f"{e.get('position','')} @ {e.get('company','')} ({e.get('period','')})")
     def _exp_dialog(self,data=None):
-        top=tb.Toplevel(self); top.title("Experiência"); top.geometry("560x360"); top.transient(self); top.grab_set()
+        t=get_active_theme()
+        top=ctk.CTkToplevel(self); top.title("Experiência"); top.geometry("560x360"); top.transient(self); top.grab_set()
         vals=data or {"company":"","position":"","period":"","highlights":[]}
         v_company=tk.StringVar(value=vals.get("company","")); v_position=tk.StringVar(value=vals.get("position","")); v_period=tk.StringVar(value=vals.get("period",""))
-        tb.Label(top,text="Empresa").pack(anchor=W,padx=10,pady=(10,0)); tb.Entry(top,textvariable=v_company).pack(fill=X,padx=10)
-        tb.Label(top,text="Cargo").pack(anchor=W,padx=10,pady=(8,0)); tb.Entry(top,textvariable=v_position).pack(fill=X,padx=10)
-        tb.Label(top,text="Período").pack(anchor=W,padx=10,pady=(8,0)); tb.Entry(top,textvariable=v_period).pack(fill=X,padx=10)
-        tb.Label(top,text="Destaques (um por linha)").pack(anchor=W,padx=10,pady=(8,0)); txt=tk.Text(top,height=6,bg="#1e1e1e",fg="white"); txt.pack(fill=BOTH,expand=True,padx=10); txt.insert("1.0","\n".join(vals.get("highlights",[])))
+        ctk.CTkLabel(top,text="Empresa").pack(anchor="w",padx=10,pady=(10,0)); ctk.CTkEntry(top,textvariable=v_company).pack(fill="x",padx=10)
+        ctk.CTkLabel(top,text="Cargo").pack(anchor="w",padx=10,pady=(8,0)); ctk.CTkEntry(top,textvariable=v_position).pack(fill="x",padx=10)
+        ctk.CTkLabel(top,text="Período").pack(anchor="w",padx=10,pady=(8,0)); ctk.CTkEntry(top,textvariable=v_period).pack(fill="x",padx=10)
+        ctk.CTkLabel(top,text="Destaques (um por linha)").pack(anchor="w",padx=10,pady=(8,0))
+        txt=tk.Text(top,height=6,bg=t["window_bg"],fg=t["text"],borderwidth=0,highlightthickness=0); txt.pack(fill="both",expand=True,padx=10); txt.insert("1.0","\n".join(vals.get("highlights",[])))
         result={}
         def ok(): result.update(company=v_company.get().strip(),position=v_position.get().strip(),period=v_period.get().strip(),highlights=[l.strip() for l in txt.get("1.0","end").splitlines() if l.strip()]); top.destroy()
-        tb.Button(top,text="Salvar",bootstyle="success",command=ok).pack(pady=10); self.wait_window(top); return result if result else None
+        ctk.CTkButton(top,text="Salvar",fg_color=t["success"],hover_color=t["border"],command=ok).pack(pady=10); self.wait_window(top); return result if result else None
     def add_exp(self):
         d=self._exp_dialog()
         if d and d.get("company"): self.curriculum.setdefault("experiences",[]).append(d); self._refresh_exp_list()
@@ -82,14 +110,15 @@ class PerfilTabMixin:
         self.lst_edu.delete(0,tk.END)
         for e in self.curriculum.get("education",[]): self.lst_edu.insert(tk.END,f"{e.get('degree','')} - {e.get('institution','')} ({e.get('year','')})")
     def _edu_dialog(self,data=None):
-        top=tb.Toplevel(self); top.title("Formação"); top.geometry("480x220"); top.transient(self); top.grab_set()
+        t=get_active_theme()
+        top=ctk.CTkToplevel(self); top.title("Formação"); top.geometry("480x220"); top.transient(self); top.grab_set()
         vals=data or {"degree":"","institution":"","year":""}; v_degree=tk.StringVar(value=vals.get("degree","")); v_inst=tk.StringVar(value=vals.get("institution","")); v_year=tk.StringVar(value=vals.get("year",""))
-        tb.Label(top,text="Curso / Título").pack(anchor=W,padx=10,pady=(10,0)); tb.Entry(top,textvariable=v_degree).pack(fill=X,padx=10)
-        tb.Label(top,text="Instituição").pack(anchor=W,padx=10,pady=(8,0)); tb.Entry(top,textvariable=v_inst).pack(fill=X,padx=10)
-        tb.Label(top,text="Ano / Período").pack(anchor=W,padx=10,pady=(8,0)); tb.Entry(top,textvariable=v_year).pack(fill=X,padx=10)
+        ctk.CTkLabel(top,text="Curso / Título").pack(anchor="w",padx=10,pady=(10,0)); ctk.CTkEntry(top,textvariable=v_degree).pack(fill="x",padx=10)
+        ctk.CTkLabel(top,text="Instituição").pack(anchor="w",padx=10,pady=(8,0)); ctk.CTkEntry(top,textvariable=v_inst).pack(fill="x",padx=10)
+        ctk.CTkLabel(top,text="Ano / Período").pack(anchor="w",padx=10,pady=(8,0)); ctk.CTkEntry(top,textvariable=v_year).pack(fill="x",padx=10)
         result={}
         def ok(): result.update(degree=v_degree.get().strip(),institution=v_inst.get().strip(),year=v_year.get().strip()); top.destroy()
-        tb.Button(top,text="Salvar",bootstyle="success",command=ok).pack(pady=10); self.wait_window(top); return result if result else None
+        ctk.CTkButton(top,text="Salvar",fg_color=t["success"],hover_color=t["border"],command=ok).pack(pady=10); self.wait_window(top); return result if result else None
     def add_edu(self):
         d=self._edu_dialog()
         if d and d.get("degree"): self.curriculum.setdefault("education",[]).append(d); self._refresh_edu_list()

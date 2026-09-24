@@ -2,13 +2,13 @@ import json, os, sys, threading, subprocess, webbrowser, re
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+from tkinter import filedialog, messagebox, ttk
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon,
+    OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -17,19 +17,30 @@ class HistoricoTabMixin:
     """Aba 6 - Historico: vagas processadas, aprovar/enviar manual, marcar resultado."""
     def _build_hist(self):
         f=self.tab_hist
-        top=tb.Frame(f); top.pack(fill=X,pady=5)
-        tb.Label(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)").pack(side=LEFT,padx=5)
-        tb.Button(top,text="Atualizar",bootstyle="info-outline",command=self._refresh_hist).pack(side=RIGHT,padx=5)
-        tb.Button(top,text="🗑 Limpar Histórico",bootstyle="danger-outline",command=self.clear_history).pack(side=RIGHT,padx=5)
+        t=style_ttk()
+        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x",pady=(0,8))
+        ctk.CTkLabel(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
+                     text_color=t["text_dim"],wraplength=900,justify="left",anchor="w").pack(side="left")
+        ctk.CTkButton(top,text="🗑 Limpar Histórico",width=140,fg_color="transparent",border_width=1,border_color=t["danger"],
+                      text_color=t["danger"],hover_color=t["card_bg"],command=self.clear_history).pack(side="right")
+        ctk.CTkButton(top,text="Atualizar",width=100,fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=self._refresh_hist).pack(side="right",padx=(0,8))
 
-        actions=tb.Frame(f); actions.pack(fill=X,pady=(0,5))
-        self.btn_approve_send=tb.Button(actions,text="✔ Aprovar e Enviar (selecionada)",bootstyle="success",command=self.approve_and_send_selected); self.btn_approve_send.pack(side=LEFT,padx=5)
-        info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side=LEFT)
-        tb.Button(actions,text="📝 Marcar Outcome",bootstyle="info-outline",command=self.mark_job_outcome).pack(side=LEFT,padx=10)
-        info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side=LEFT)
-        self.btn_gen_docs=tb.Button(actions,text="📄 Gerar PDF/Carta",bootstyle="warning-outline",command=self.generate_docs_selected); self.btn_gen_docs.pack(side=LEFT,padx=10)
-        info_icon(actions,"Gera currículo otimizado + carta de apresentação pra vaga selecionada, mesmo que o\nmatch esteja abaixo do piso automático (50%) — dispara uma chamada de IA na hora.").pack(side=LEFT)
-        tb.Button(actions,text="📂 Abrir PDF/Carta",bootstyle="secondary-outline",command=self.open_docs_selected).pack(side=LEFT,padx=10)
+        actions=ctk.CTkFrame(f, fg_color="transparent"); actions.pack(fill="x",pady=(0,8))
+        self.btn_approve_send=ctk.CTkButton(actions,text="✔ Aprovar e Enviar (selecionada)",fg_color=t["success"],
+                                             hover_color=t["border"],command=self.approve_and_send_selected)
+        self.btn_approve_send.pack(side="left",padx=(0,4))
+        info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side="left")
+        ctk.CTkButton(actions,text="📝 Marcar Outcome",fg_color="transparent",border_width=1,border_color=t["primary"],
+                      text_color=t["primary"],hover_color=t["card_bg"],command=self.mark_job_outcome).pack(side="left",padx=(16,4))
+        info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side="left")
+        self.btn_gen_docs=ctk.CTkButton(actions,text="📄 Gerar PDF/Carta",fg_color="transparent",border_width=1,
+                                         border_color=t["primary"],text_color=t["primary"],hover_color=t["card_bg"],
+                                         command=self.generate_docs_selected)
+        self.btn_gen_docs.pack(side="left",padx=(16,4))
+        info_icon(actions,"Gera currículo otimizado + carta de apresentação pra vaga selecionada, mesmo que o\nmatch esteja abaixo do piso automático (50%) — dispara uma chamada de IA na hora.").pack(side="left")
+        ctk.CTkButton(actions,text="📂 Abrir PDF/Carta",fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=self.open_docs_selected).pack(side="left",padx=(16,0))
 
         cols=("vaga","empresa","local","match","status","outcome","plataforma")
         self._hist_col_labels={"vaga":"Vaga","empresa":"Empresa","local":"Local","match":"Match","status":"Status","outcome":"Outcome","plataforma":"Plataforma"}
@@ -37,11 +48,13 @@ class HistoricoTabMixin:
         self._hist_col_to_sql={"vaga":"title","empresa":"company","local":"location","match":"match_score","status":"status","outcome":"outcome","plataforma":"platform"}
         # nenhuma coluna ordenada por padrão -> ordem natural (mais recente primeiro, por id)
         self._hist_sort_col=None; self._hist_sort_dir=None
-        self.tree=tb.Treeview(f,columns=cols,show="headings",bootstyle="dark",height=14)
+        tree_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        tree_outer.pack(fill="both",expand=True)
+        self.tree=ttk.Treeview(tree_outer,columns=cols,show="headings",height=14,style="Vamp.Treeview")
         for c in cols: self.tree.heading(c,command=lambda c=c:self._sort_hist_by(c))
-        self.tree.column("vaga",width=240); self.tree.column("empresa",width=150); self.tree.column("local",width=120); self.tree.column("match",width=55,anchor=CENTER); self.tree.column("status",width=95,anchor=CENTER); self.tree.column("outcome",width=100,anchor=CENTER); self.tree.column("plataforma",width=85,anchor=CENTER)
+        self.tree.column("vaga",width=240); self.tree.column("empresa",width=150); self.tree.column("local",width=120); self.tree.column("match",width=55,anchor="center"); self.tree.column("status",width=95,anchor="center"); self.tree.column("outcome",width=100,anchor="center"); self.tree.column("plataforma",width=85,anchor="center")
         self._update_hist_headers()
-        self.tree.pack(fill=BOTH,expand=True,pady=5); self.tree.bind("<Double-Button-1>",self._on_hist_dbl); self._refresh_hist()
+        self.tree.pack(fill="both",expand=True,padx=8,pady=8); self.tree.bind("<Double-Button-1>",self._on_hist_dbl); self._refresh_hist()
     def _update_hist_headers(self):
         for c in self.tree["columns"]:
             label=self._hist_col_labels.get(c,c.capitalize())
@@ -121,7 +134,7 @@ class HistoricoTabMixin:
         # inteira até terminar. Segue o mesmo padrão de thread+after() já usado em
         # execucao.py:run_automation pra não travar o mainloop do Tkinter.
         row_dict=dict(row)
-        self.btn_approve_send.config(state=DISABLED, text="Enviando…")
+        self.btn_approve_send.configure(state="disabled", text="Enviando…")
         def worker():
             try:
                 from sender import apply_to_job
@@ -130,13 +143,13 @@ class HistoricoTabMixin:
                 log_send_attempt(job_id)
                 update_job_status(job_id, status)
                 def done_ok():
-                    self.btn_approve_send.config(state=NORMAL, text="✔ Aprovar e Enviar (selecionada)")
+                    self.btn_approve_send.configure(state="normal", text="✔ Aprovar e Enviar (selecionada)")
                     messagebox.showinfo("Aprovar e Enviar",f"{row_dict['title']} @ {row_dict['company']} → status: {status}")
                     self._refresh_hist(); self._refresh_dashboard()
                 self.after(0, done_ok)
             except Exception as e:
                 def done_err():
-                    self.btn_approve_send.config(state=NORMAL, text="✔ Aprovar e Enviar (selecionada)")
+                    self.btn_approve_send.configure(state="normal", text="✔ Aprovar e Enviar (selecionada)")
                     messagebox.showerror("Aprovar e Enviar",str(e))
                 self.after(0, done_err)
         threading.Thread(target=worker, daemon=True).start()
@@ -155,7 +168,7 @@ class HistoricoTabMixin:
         # mesma chamada de IA cara que process_job_ats() usa acima do piso automático - aqui
         # roda sem checar o piso, já que é decisão explícita do usuário, não do pipeline. Roda
         # em thread (mesmo padrão de approve_and_send_selected) pra não travar a GUI.
-        self.btn_gen_docs.config(state=DISABLED, text="Gerando…")
+        self.btn_gen_docs.configure(state="disabled", text="Gerando…")
         def worker():
             try:
                 from ats_optimizer import generate_docs_for_job
@@ -163,13 +176,13 @@ class HistoricoTabMixin:
                 res=generate_docs_for_job(job_id, row_dict["title"], row_dict["company"], row_dict["description"])
                 update_job_status(job_id, row_dict["status"], resume_path=res["resume_path"], cover_path=res["cover_path"])
                 def done_ok():
-                    self.btn_gen_docs.config(state=NORMAL, text="📄 Gerar PDF/Carta")
+                    self.btn_gen_docs.configure(state="normal", text="📄 Gerar PDF/Carta")
                     messagebox.showinfo("Gerar PDF/Carta",f"Gerado com sucesso pra {row_dict['title']} @ {row_dict['company']}.\nUse '📂 Abrir PDF/Carta' pra visualizar.")
                     self._refresh_hist()
                 self.after(0, done_ok)
             except Exception as e:
                 def done_err():
-                    self.btn_gen_docs.config(state=NORMAL, text="📄 Gerar PDF/Carta")
+                    self.btn_gen_docs.configure(state="normal", text="📄 Gerar PDF/Carta")
                     messagebox.showerror("Gerar PDF/Carta",str(e))
                 self.after(0, done_err)
         threading.Thread(target=worker, daemon=True).start()
@@ -194,10 +207,11 @@ class HistoricoTabMixin:
         sel=self.tree.selection()
         if not sel: messagebox.showinfo("Outcome","Selecione uma vaga na lista."); return
         job_id=int(sel[0])
-        top=tb.Toplevel(self); top.title("Atualizar Outcome"); top.geometry("360x150"); top.transient(self); top.grab_set()
-        tb.Label(top,text="Resultado real da candidatura:").pack(anchor=W,padx=10,pady=(12,4))
+        t=get_active_theme()
+        top=ctk.CTkToplevel(self); top.title("Atualizar Outcome"); top.geometry("360x160"); top.transient(self); top.grab_set()
+        ctk.CTkLabel(top,text="Resultado real da candidatura:").pack(anchor="w",padx=10,pady=(14,6))
         var_outcome=tk.StringVar(value="sem_resposta")
-        tb.Combobox(top,textvariable=var_outcome,values=OUTCOME_OPTIONS,state="readonly").pack(fill=X,padx=10)
+        ctk.CTkComboBox(top,variable=var_outcome,values=OUTCOME_OPTIONS,state="readonly").pack(fill="x",padx=10)
         def save():
             try:
                 from db import update_job_outcome
@@ -205,7 +219,7 @@ class HistoricoTabMixin:
                 self._refresh_hist(); self._refresh_dashboard()
             except Exception as e: messagebox.showerror("Outcome",str(e))
             top.destroy()
-        tb.Button(top,text="Salvar",bootstyle="success",command=save).pack(pady=12)
+        ctk.CTkButton(top,text="Salvar",fg_color=t["success"],hover_color=t["border"],command=save).pack(pady=14)
     def clear_history(self):
         if not messagebox.askyesno(
             "Limpar Histórico",

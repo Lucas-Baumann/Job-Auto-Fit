@@ -2,13 +2,13 @@ import json, os, sys, threading, subprocess, webbrowser, re
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+from tkinter import filedialog, messagebox, ttk
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 from gui_common import (
-    OUTCOME_OPTIONS, Tooltip, info_icon,
+    OUTCOME_OPTIONS, Tooltip, info_icon, card, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
 )
@@ -17,37 +17,66 @@ class PerfilGithubTabMixin:
     """Aba 7 - Perfil GitHub: gera e publica READMEs de perfil/repositorios."""
     def _build_profile(self):
         f=self.tab_profile
-        top=tb.Frame(f); top.pack(fill=X,pady=5)
-        tb.Label(top,text="Username GitHub").pack(side=LEFT,padx=5); tb.Entry(top,textvariable=self.var_profile_user,width=24).pack(side=LEFT,padx=5)
-        tb.Checkbutton(top,text="Usar IA para reescrever bio",variable=self.var_profile_use_llm,bootstyle="round-toggle").pack(side=LEFT,padx=10)
-        info_icon(top,"Se ativado e IA configurada (aba 3), reescreve bio/linhas typing com seu currículo + perfil antigo. Sem IA usa heurístico.").pack(side=LEFT)
-        token_row=tb.Frame(f); token_row.pack(fill=X,pady=4)
-        tb.Label(token_row,text="GitHub Token (repo scope)").pack(side=LEFT,padx=5); self.ent_github_token=tb.Entry(token_row,textvariable=self.var_github_token,show="*",width=40); self.ent_github_token.pack(side=LEFT,padx=5,fill=X,expand=True)
-        info_icon(token_row,"Crie em github.com/settings/tokens (classic) com scope 'repo' — necessário para push direto. Deixe vazio para só gerar local.").pack(side=LEFT)
-        tb.Button(token_row,text="Salvar",bootstyle="secondary-outline",width=8,command=lambda:self.save_all(silent=True)).pack(side=LEFT,padx=5)
-        btns=tb.Frame(f); btns.pack(fill=X,pady=5)
-        tb.Button(btns,text="🔍 Analisar perfil antigo",bootstyle="info-outline",command=self.analyze_profile).pack(side=LEFT,padx=5)
-        tb.Button(btns,text="✨ Gerar README Perfil",bootstyle="success",command=self.generate_profile).pack(side=LEFT,padx=5)
-        tb.Button(btns,text="🚀 Gerar e Push Perfil",bootstyle="success",command=self.generate_and_push_profile).pack(side=LEFT,padx=5)
-        tb.Button(btns,text="📂 Abrir output_github",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
-        tb.Button(btns,text="📋 Copiar workflow snake",bootstyle="secondary-outline",command=self.copy_snake_workflow).pack(side=LEFT,padx=5)
-        self.txt_profile_log=tk.Text(f,height=8,bg="#1e1e1e",fg="#d0d0d0",font=("Consolas",9),wrap="word"); self.txt_profile_log.pack(fill=BOTH,expand=True,pady=5)
+        t=style_ttk()
+        top=ctk.CTkFrame(f, fg_color="transparent"); top.pack(fill="x",pady=(0,8))
+        ctk.CTkLabel(top,text="Username GitHub",text_color=t["text_dim"]).pack(side="left",padx=(0,6))
+        ctk.CTkEntry(top,textvariable=self.var_profile_user,width=180).pack(side="left",padx=(0,10))
+        ctk.CTkCheckBox(top,text="Usar IA para reescrever bio",variable=self.var_profile_use_llm).pack(side="left")
+        info_icon(top,"Se ativado e IA configurada (aba 3), reescreve bio/linhas typing com seu currículo + perfil antigo. Sem IA usa heurístico.").pack(side="left")
+
+        token_row=ctk.CTkFrame(f, fg_color="transparent"); token_row.pack(fill="x",pady=(0,8))
+        ctk.CTkLabel(token_row,text="GitHub Token (repo scope)",text_color=t["text_dim"]).pack(side="left",padx=(0,6))
+        self.ent_github_token=ctk.CTkEntry(token_row,textvariable=self.var_github_token,show="*")
+        self.ent_github_token.pack(side="left",padx=(0,6),fill="x",expand=True)
+        info_icon(token_row,"Crie em github.com/settings/tokens (classic) com scope 'repo' — necessário para push direto. Deixe vazio para só gerar local.").pack(side="left")
+        ctk.CTkButton(token_row,text="Salvar",width=80,fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=lambda:self.save_all(silent=True)).pack(side="left",padx=(6,0))
+
+        btns=ctk.CTkFrame(f, fg_color="transparent"); btns.pack(fill="x",pady=(0,8))
+        ctk.CTkButton(btns,text="🔍 Analisar perfil antigo",fg_color="transparent",border_width=1,border_color=t["primary"],
+                      text_color=t["primary"],hover_color=t["card_bg"],command=self.analyze_profile).pack(side="left",padx=(0,6))
+        ctk.CTkButton(btns,text="✨ Gerar README Perfil",fg_color=t["success"],hover_color=t["border"],
+                      command=self.generate_profile).pack(side="left",padx=6)
+        ctk.CTkButton(btns,text="🚀 Gerar e Push Perfil",fg_color=t["success"],hover_color=t["border"],
+                      command=self.generate_and_push_profile).pack(side="left",padx=6)
+        ctk.CTkButton(btns,text="📂 Abrir output_github",fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side="left",padx=6)
+        ctk.CTkButton(btns,text="📋 Copiar workflow snake",fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["card_bg"],command=self.copy_snake_workflow).pack(side="left",padx=6)
+
+        log_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        log_outer.pack(fill="both",expand=True,pady=(0,8))
+        self.txt_profile_log=tk.Text(log_outer,height=8,bg=t["card_bg"],fg=t["text"],font=("Consolas",9),
+                                      wrap="word",borderwidth=0,highlightthickness=0)
+        self.txt_profile_log.pack(fill="both",expand=True,padx=10,pady=10)
         self.txt_profile_log.insert("1.0","Pronto. Informe username e clique Analisar. O gerador usa a estética perfeita (dark tokyonight + summary-cards + snake picture) e analisa seu README antigo se existir.\n")
-        row=tb.Frame(f); row.pack(fill=X,pady=4)
-        tb.Label(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT)
+
+        row=ctk.CTkFrame(f, fg_color="transparent"); row.pack(fill="x",pady=(0,8))
+        ctk.CTkLabel(row,text="Após gerar: copie output_github/README_<user>.md → repo <user>/<user> → commit → push. Snake: copie output_github/snake.yml → <user>/<user>/.github/workflows/",
+                     font=ctk.CTkFont(size=10),text_color=t["text_dim"],wraplength=1100,justify="left",anchor="w").pack(side="left")
+
         # Repositórios
-        card_repos=tb.Labelframe(f,text="Repositórios — selecione com ⭐ para reformular README",padding=8,bootstyle="warning"); card_repos.pack(fill=BOTH,expand=True,pady=5)
-        top_repos=tb.Frame(card_repos); top_repos.pack(fill=X)
-        tb.Button(top_repos,text="🔍 Buscar Repos do Perfil",bootstyle="info-outline",command=self.fetch_profile_repos).pack(side=LEFT,padx=5)
-        tb.Button(top_repos,text="✨ Reformular Selecionados (⭐)",bootstyle="warning",command=self.generate_selected_repos).pack(side=LEFT,padx=5)
-        tb.Button(top_repos,text="🚀 Push Selecionados",bootstyle="success",command=self.push_selected_repos).pack(side=LEFT,padx=5)
-        tb.Button(top_repos,text="📂 Abrir saída",bootstyle="secondary-outline",command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side=LEFT,padx=5)
-        tb.Label(top_repos,text="  Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",font=("Segoe UI",8),bootstyle="light").pack(side=LEFT,padx=5)
+        card_repos, content_repos = card(f, "Repositórios — selecione com ⭐ para reformular README")
+        card_repos.pack(fill="both",expand=True)
+        top_repos=ctk.CTkFrame(content_repos, fg_color="transparent"); top_repos.pack(fill="x",pady=(0,8))
+        ctk.CTkButton(top_repos,text="🔍 Buscar Repos do Perfil",fg_color="transparent",border_width=1,border_color=t["primary"],
+                      text_color=t["primary"],hover_color=t["window_bg"],command=self.fetch_profile_repos).pack(side="left",padx=(0,6))
+        ctk.CTkButton(top_repos,text="✨ Reformular Selecionados (⭐)",fg_color=t["primary"],hover_color=t["border"],
+                      command=self.generate_selected_repos).pack(side="left",padx=6)
+        ctk.CTkButton(top_repos,text="🚀 Push Selecionados",fg_color=t["success"],hover_color=t["border"],
+                      command=self.push_selected_repos).pack(side="left",padx=6)
+        ctk.CTkButton(top_repos,text="📂 Abrir saída",fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["window_bg"],command=lambda:self._open_folder(BASE_DIR/"output_github")).pack(side="left",padx=6)
+        # linha própria (não inline com os botões) - com 4 botões nessa fileira, o texto
+        # inline estourava a largura do card e sobrepunha a borda arredondada
+        ctk.CTkLabel(content_repos,text="Clique na linha para ⭐/desmarcar • Gera README otimizado dark por projeto",
+                     font=ctk.CTkFont(size=10),text_color=t["text_dim"],anchor="w").pack(fill="x",pady=(0,8))
+
         cols_repos=("star","repo","lang","stars","readme")
-        self.tree_repos=tb.Treeview(card_repos,columns=cols_repos,show="headings",height=7,bootstyle="warning")
-        for c,t,w in [("star","⭐",30),("repo","Repositório",200),("lang","Lang",80),("stars","★",50),("readme","README?",80)]:
-            self.tree_repos.heading(c,text=t); self.tree_repos.column(c,width=w,anchor=CENTER if c in ("star","stars","readme") else W)
-        self.tree_repos.pack(fill=BOTH,expand=True,pady=5)
+        self.tree_repos=ttk.Treeview(content_repos,columns=cols_repos,show="headings",height=7,style="Vamp.Treeview")
+        for c,txt,w in [("star","⭐",30),("repo","Repositório",200),("lang","Lang",80),("stars","★",50),("readme","README?",80)]:
+            self.tree_repos.heading(c,text=txt); self.tree_repos.column(c,width=w,anchor="center" if c in ("star","stars","readme") else "w")
+        self.tree_repos.pack(fill="both",expand=True)
         self.tree_repos.bind("<ButtonRelease-1>", lambda e: self.after(100, self.toggle_repo_star))
         self.repos_cache=[]
         self.repos_starred=set()

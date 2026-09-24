@@ -5,13 +5,16 @@ import json
 import tkinter as tk
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
+import customtkinter as ctk
 
 from config import Config
+from theme import get_active_theme
 
 OUTCOME_OPTIONS = ["sem_resposta", "visualizado", "entrevista", "teste_tecnico", "proposta", "rejeitado", "contratado"]
 
 class Tooltip:
-    """Tooltip simples ao passar mouse em ícone ⓘ"""
+    """Tooltip simples ao passar mouse em ícone ⓘ — cores seguem o tema ativo (ver theme.py)
+    em vez de fixas, pra não destoar dos cards novos (CustomTkinter) de cada aba."""
     def __init__(self, widget, text):
         self.widget = widget
         self.text = text
@@ -20,13 +23,14 @@ class Tooltip:
         widget.bind("<Leave>", self.hide)
     def show(self, _):
         if self.tip: return
+        t = get_active_theme()
         x = self.widget.winfo_rootx() + 18
         y = self.widget.winfo_rooty() + 18
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
         self.tip.geometry(f"+{x}+{y}")
-        lbl = tk.Label(self.tip, text=self.text, bg="#2b2b2b", fg="#e0e0e0", relief=SOLID, borderwidth=1,
-                       font=("Segoe UI", 8), wraplength=300, justify=LEFT, padx=8, pady=6)
+        lbl = tk.Label(self.tip, text=self.text, bg=t["card_bg"], fg=t["text"], relief=SOLID, borderwidth=1,
+                       highlightbackground=t["border"], font=("Segoe UI", 8), wraplength=300, justify=LEFT, padx=8, pady=6)
         lbl.pack()
     def hide(self, _):
         if self.tip:
@@ -34,9 +38,89 @@ class Tooltip:
             self.tip = None
 
 def info_icon(parent, tooltip_text):
-    lbl = tb.Label(parent, text=" ⓘ", font=("Segoe UI", 9, "bold"), bootstyle="info", cursor="hand2")
+    """Ícone ⓘ com tooltip - usa CTkLabel pra herdar o fundo transparente do card novo
+    (CustomTkinter) em vez do fundo do tema ttkbootstrap antigo, que já não bate mais com
+    as cores de theme.py."""
+    t = get_active_theme()
+    lbl = ctk.CTkLabel(parent, text=" ⓘ", font=ctk.CTkFont(size=12, weight="bold"), text_color=t["primary"], cursor="hand2")
     Tooltip(lbl, tooltip_text)
     return lbl
+
+def card(parent, title, theme=None):
+    """Container com canto arredondado + título em negrito no topo, substitui o antigo
+    tb.Labelframe (borda fina colorida) - ver blueprint_vamp_hunter.md secao 3.B.
+    Retorna (frame_externo, frame_conteudo); os widgets do chamador vao dentro do conteudo,
+    o titulo ja fica fora reservado."""
+    t = theme or get_active_theme()
+    outer = ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+    if title:
+        ctk.CTkLabel(outer, text=title, text_color=t["text"], anchor="w",
+                     font=ctk.CTkFont(weight="bold")).pack(fill="x", padx=14, pady=(12,2))
+    content = ctk.CTkFrame(outer, fg_color="transparent")
+    content.pack(fill="both", expand=True, padx=14, pady=(0,14))
+    return outer, content
+
+def field(parent, label_text, build_widget, theme=None, tooltip=None):
+    """Bloco rótulo-acima-do-campo (blueprint secao 3.A): label em cima, widget embaixo,
+    dentro do mesmo frame transparente - facilita empilhar (pack) ou distribuir em grade
+    (grid) esses blocos sem repetir o padrao em cada aba. tooltip opcional -> ícone ⓘ ao
+    lado do rótulo (mesmo texto explicativo que os info_icon() soltos usavam antes)."""
+    t = theme or get_active_theme()
+    wrap = ctk.CTkFrame(parent, fg_color="transparent")
+    hdr = ctk.CTkFrame(wrap, fg_color="transparent")
+    hdr.pack(anchor="w", pady=(0,3), fill="x")
+    ctk.CTkLabel(hdr, text=label_text, text_color=t["text_dim"], anchor="w",
+                 font=ctk.CTkFont(size=11)).pack(side="left")
+    if tooltip:
+        info_icon(hdr, tooltip).pack(side="left")
+    widget = build_widget(wrap)
+    widget.pack(fill="x")
+    return wrap, widget
+
+class CTkSpinbox(ctk.CTkFrame):
+    """CustomTkinter nao tem Spinbox nativo - reproduz o essencial (entry numerica + -/+)
+    o suficiente pros campos desta aplicacao (limites, idade max, score minimo etc). Aceita
+    a mesma tk.IntVar/DoubleVar que o codigo ja usava com tb.Spinbox, sem precisar trocar
+    o resto da logica que le/escreve essas variaveis."""
+    def __init__(self, parent, from_=0, to=100, textvariable=None, increment=1, width=90, theme=None, **kw):
+        t = theme or get_active_theme()
+        super().__init__(parent, fg_color="transparent", **kw)
+        self.from_, self.to, self.increment = from_, to, increment
+        self.var = textvariable if textvariable is not None else tk.IntVar(value=from_)
+        btn_kw = dict(width=26, height=28, fg_color=t["card_bg"], text_color=t["text"],
+                      hover_color=t["border"], border_width=1, border_color=t["border"], corner_radius=6)
+        ctk.CTkButton(self, text="−", command=self._dec, **btn_kw).pack(side="left")
+        self.entry = ctk.CTkEntry(self, textvariable=self.var, width=width-56, justify="center")
+        self.entry.pack(side="left", padx=4)
+        ctk.CTkButton(self, text="+", command=self._inc, **btn_kw).pack(side="left")
+    def _step(self, delta):
+        try: v = float(self.var.get())
+        except (ValueError, tk.TclError): v = self.from_
+        v = max(self.from_, min(self.to, v + delta))
+        self.var.set(int(v) if float(v).is_integer() else v)
+    def _dec(self): self._step(-self.increment)
+    def _inc(self): self._step(self.increment)
+
+_ttk_styled = False
+def style_ttk(theme=None):
+    """Configura os estilos ttk (Treeview/Progressbar) pra combinar com o tema ativo
+    (theme.py) - usado pelas abas que ainda dependem de widgets ttk puros porque o
+    CustomTkinter não tem equivalente nativo (Treeview: Histórico/Perfil GitHub;
+    Progressbar indeterminate: Execução). Idempotente - só recalcula se chamado nas
+    trocas de tema (hoje só CLEAN_TECH está ativo, ver blueprint_vamp_hunter.md fase 5)."""
+    from tkinter import ttk
+    t = theme or get_active_theme()
+    style = ttk.Style()
+    style.theme_use(style.theme_use())  # garante engine 'clam'/tema base já carregado
+    style.configure("Vamp.Treeview", background=t["card_bg"], fieldbackground=t["card_bg"],
+                     foreground=t["text"], bordercolor=t["border"], borderwidth=0, rowheight=26)
+    style.configure("Vamp.Treeview.Heading", background=t["window_bg"], foreground=t["text_dim"],
+                     relief="flat", borderwidth=1)
+    style.map("Vamp.Treeview", background=[("selected", t["primary"])], foreground=[("selected", "#ffffff")])
+    style.map("Vamp.Treeview.Heading", background=[("active", t["border"])])
+    style.configure("Vamp.Horizontal.TProgressbar", background=t["primary"], troughcolor=t["card_bg"],
+                     bordercolor=t["border"], lightcolor=t["primary"], darkcolor=t["primary"])
+    return t
 
 # BASE_DIR vem de Config (mesma detecção de .exe/_MEIPASS usada no resto do projeto) — antes a
 # GUI calculava seu próprio BASE_DIR sem essa lógica e ficava com caminhos errados (apontando
