@@ -223,6 +223,19 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
                       text_color=t["text"],hover_color=t["card_bg"],command=self.export_config).pack(side="right",padx=(6,0))
         ctk.CTkButton(top,text="Importar",width=90,fg_color="transparent",border_width=1,border_color=t["border"],
                       text_color=t["text"],hover_color=t["card_bg"],command=self.import_config).pack(side="right")
+        # seletor manual de tema (controle "oficial", complementar ao easter egg do morcego -
+        # esse aqui é descoberto, o do rodapé continua escondido de propósito). Trocar aqui
+        # também aciona o Modo Vampiro (Crimson Velvet/Gothic Castle contam como vampiro,
+        # ver theme.is_vampire_mode) - textos das abas/botões remapeiam igual ao gatilho oculto.
+        from theme import THEME_DISPLAY_NAMES, get_active_theme_name, set_active_theme
+        def _on_theme_pick(display_name):
+            rev={v:k for k,v in THEME_DISPLAY_NAMES.items()}
+            set_active_theme(rev.get(display_name,"clean_tech"))
+            self._rebuild_ui()
+        combo_theme=ctk.CTkComboBox(top,values=list(THEME_DISPLAY_NAMES.values()),state="readonly",
+                                     width=140,command=_on_theme_pick)
+        combo_theme.set(THEME_DISPLAY_NAMES[get_active_theme_name()])
+        combo_theme.pack(side="right",padx=(0,10))
 
         self.nb=ttk.Notebook(self, style="Vamp.TNotebook"); self.nb.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0,10))
         self.tab_perfil=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)

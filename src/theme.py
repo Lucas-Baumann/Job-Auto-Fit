@@ -46,11 +46,25 @@ GOTHIC_CASTLE = {
 }
 
 THEMES = {"clean_tech": CLEAN_TECH, "crimson_velvet": CRIMSON_VELVET, "gothic_castle": GOTHIC_CASTLE}
+THEME_DISPLAY_NAMES = {"clean_tech": "Clean Tech", "crimson_velvet": "Crimson Velvet", "gothic_castle": "Gothic Castle"}
+
+# Paleta categórica fixa pra gráficos (Dashboard) - ordem fixa, nunca ciclada/gerada (ver
+# skill de dataviz: "assign categorical hues in fixed order"). Matizes bem distintos entre
+# si de propósito (azul/dourado/verde-água/roxo/rosa/cinza) - não são as cores de status
+# (primary/success/danger) porque aqui a cor identifica CATEGORIA (status da vaga, plataforma),
+# não estado (sucesso/erro), então reciclar as cores de status confundiria os dois sentidos.
+# Um único conjunto pras 3 paletas (não uma por tema) - simplificação deliberada: a cor de
+# um gráfico não precisa combinar com a cor de marca do tema, só precisa ser legível contra
+# fundos escuros (todos os 3 temas são escuros) e distinguível categoria a categoria.
+CHART_COLORS = ["#4B9CD3", "#E0A93E", "#3EC9B0", "#9B7FE0", "#E0719B", "#8B93A1"]
 
 _active_theme_name = "clean_tech"
 
 def get_active_theme() -> dict:
     return THEMES[_active_theme_name]
+
+def get_active_theme_name() -> str:
+    return _active_theme_name
 
 def set_active_theme(name: str):
     global _active_theme_name

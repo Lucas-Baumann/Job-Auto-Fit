@@ -117,7 +117,13 @@ O aplicativo operará alternando dinamicamente entre os estados através de um m
   piloto, depois Currículo, Busca & Filtros, IA & Conexões, Execução, Histórico e Perfil
   GitHub). Treeview (Histórico/Perfil GitHub) e Progressbar indeterminate (Execução)
   continuam ttk puro, estilizados via `style_ttk()` em `gui_common.py` — CustomTkinter não
-  tem equivalente nativo pra nenhum dos dois.
+  tem equivalente nativo pra nenhum dos dois. Dashboard revisitado depois (2026-09-24): o
+  antigo bloco único de texto/ASCII virou 3 gráficos de barra de verdade (tk.Canvas, paleta
+  categórica fixa de `theme.CHART_COLORS`) + seção "Vagas Recentes" - resolvia o espaço vazio
+  apontado pelo usuário.
+- ✅ **Seletor manual de tema** (não estava no blueprint original, adicionado por pedido) — 
+  combobox na barra de cima (`gui.py`) entre Clean Tech/Crimson Velvet/Gothic Castle, chama o
+  mesmo `_rebuild_ui()` que os gatilhos automáticos da Fase 5 usam.
 - ✅ **Fase 5 (Modo Vampiro dinâmico + easter eggs)** — os dois gatilhos da seção 4
   (tríplo-clique no morcego escondido no rodapé + "Despertar Noturno" 00h-03h), troca pro
   tema Crimson Velvet com banner temporário, dicionário de termos dinâmicos (abas 2/3/6,
