@@ -151,8 +151,15 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         # não é exatamente a cor de theme.py - força o mesmo window_bg pra não ter costura de
         # cor entre o fundo da janela e os cards CustomTkinter por cima.
         self.configure(bg=t["window_bg"])
+        # grid em vez de pack pra topo/notebook/rodapé: com pack, quando a janela era
+        # encolhida abaixo da soma das alturas naturais dos 3, o notebook (expand=True)
+        # consumia todo o espaço restante e a barra de baixo ("Salvar Tudo" etc, empacotada
+        # por último) sumia da tela por falta de espaço. Com grid e peso só na linha do
+        # notebook (linha 1), topo e rodapé sempre ficam com a altura mínima garantida -
+        # quem encolhe/corta primeiro é o notebook (cujas abas já têm scroll próprio).
+        self.grid_rowconfigure(1, weight=1); self.grid_columnconfigure(0, weight=1)
 
-        top=ctk.CTkFrame(self, fg_color=t["window_bg"]); top.pack(fill="x", padx=10, pady=10)
+        top=ctk.CTkFrame(self, fg_color=t["window_bg"]); top.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
         ctk.CTkLabel(top,text="VampHunter",font=ctk.CTkFont(size=20,weight="bold"),text_color=t["primary"]).pack(side="left")
         ctk.CTkLabel(top,text="  Coleta • Filtragem Avançada • ATS • Envio • Relatório • Dashboard",
                      font=ctk.CTkFont(size=12),text_color=t["text_dim"]).pack(side="left",padx=10)
@@ -161,7 +168,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         ctk.CTkButton(top,text="Importar",width=90,fg_color="transparent",border_width=1,border_color=t["border"],
                       text_color=t["text"],hover_color=t["card_bg"],command=self.import_config).pack(side="right")
 
-        self.nb=ttk.Notebook(self, style="Vamp.TNotebook"); self.nb.pack(fill="both",expand=True,padx=10,pady=(0,10))
+        self.nb=ttk.Notebook(self, style="Vamp.TNotebook"); self.nb.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0,10))
         self.tab_perfil=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
         self.tab_busca=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
         self.tab_ia=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
@@ -172,7 +179,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico "); self.nb.add(self.tab_profile,text=" 7. Perfil GitHub ")
         self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist(); self._build_profile()
 
-        bottom=ctk.CTkFrame(self, fg_color=t["window_bg"]); bottom.pack(fill="x", padx=10, pady=(0,10))
+        bottom=ctk.CTkFrame(self, fg_color=t["window_bg"]); bottom.grid(row=2, column=0, sticky="ew", padx=10, pady=(0,10))
         ctk.CTkButton(bottom,text="Salvar Tudo",width=120,fg_color=t["success"],hover_color=t["border"],
                       command=self.save_all).pack(side="left")
         ctk.CTkLabel(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",
