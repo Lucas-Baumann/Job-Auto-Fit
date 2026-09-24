@@ -37,7 +37,7 @@ class DashboardTabMixin:
         self.dash_cards.pack(fill="x", pady=(0,10))
         self.lbl_total=self._stat_tile(self.dash_cards, "0", "vagas totais", t["primary"])
         self.lbl_high=self._stat_tile(self.dash_cards, "0", "match ≥60%", t["success"])
-        self.lbl_today=self._stat_tile(self.dash_cards, "0", "hoje", t["text"])
+        self.lbl_today=self._stat_tile(self.dash_cards, "0", "hoje", t["text"], last=True)
 
         # distribuição por status/plataforma
         self.frame_bars=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
@@ -48,11 +48,15 @@ class DashboardTabMixin:
                                 borderwidth=0, highlightthickness=0)
         self.bars_text.pack(fill="both", expand=True, padx=16, pady=(0,16))
 
-    def _stat_tile(self, parent, value, label, accent_color):
-        """Um card pequeno (número grande + legenda) - unidade repetida 3x no dashboard."""
+    def _stat_tile(self, parent, value, label, accent_color, last=False):
+        """Um card pequeno (número grande + legenda) - unidade repetida 3x no dashboard.
+
+        O último tile não leva padx à direita: senão a linha de cards para 10px antes da
+        borda direita, enquanto o card de distribuição logo abaixo vai até o fim (fill="both"
+        sem padx) - as duas larguras ficavam visualmente desalinhadas."""
         t=get_active_theme()
         tile=ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
-        tile.pack(side="left", fill="x", expand=True, padx=(0,10))
+        tile.pack(side="left", fill="x", expand=True, padx=(0,0 if last else 10))
         lbl_value=ctk.CTkLabel(tile, text=value, text_color=accent_color, font=ctk.CTkFont(size=22, weight="bold"))
         lbl_value.pack(anchor="w", padx=16, pady=(12,0))
         ctk.CTkLabel(tile, text=label, text_color=t["text_dim"]).pack(anchor="w", padx=16, pady=(0,12))
@@ -72,13 +76,19 @@ class DashboardTabMixin:
             cur.execute("SELECT outcome, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows3=cur.fetchall()
             cur.execute("SELECT outcome, AVG(match_score) avg_score, COUNT(*) c FROM jobs WHERE outcome IS NOT NULL AND outcome!='' GROUP BY outcome"); rows4=cur.fetchall()
             con.close()
+            # largura da coluna calculada a partir do maior nome de cada seção - um valor fixo
+            # (ex: "<12") quebra o alinhamento assim que aparece um nome mais comprido (foi o
+            # caso de "linkedin_post", 13 chars, deslocando número e barra pra direita).
             txt=f"Por status:\n"
-            for r in rows: txt+=f"  {r['status']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
+            w=max((len(r['status']) for r in rows), default=0)+2
+            for r in rows: txt+=f"  {r['status']:<{w}} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             txt+="\nPor plataforma:\n"
-            for r in rows2: txt+=f"  {r['platform']:<12} {r['c']:>4} {'█'*min(30,r['c'])}\n"
+            w=max((len(r['platform']) for r in rows2), default=0)+2
+            for r in rows2: txt+=f"  {r['platform']:<{w}} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             if rows3:
                 txt+="\nPor outcome (marcados manualmente):\n"
-                for r in rows3: txt+=f"  {r['outcome']:<14} {r['c']:>4} {'█'*min(30,r['c'])}\n"
+                w=max((len(r['outcome']) for r in rows3), default=0)+2
+                for r in rows3: txt+=f"  {r['outcome']:<{w}} {r['c']:>4} {'█'*min(30,r['c'])}\n"
             if rows4:
                 # a IA realmente acerta? cruza a nota que ela deu com o resultado real da
                 # candidatura (marcado manualmente na aba Histórico) — nota média alta em
@@ -87,10 +97,11 @@ class DashboardTabMixin:
                 por_outcome={r["outcome"]:(r["avg_score"] or 0, r["c"]) for r in rows4}
                 total_marcados=sum(c for _,c in por_outcome.values())
                 txt+="\nMatch médio por outcome (a IA acerta?):\n"
+                w=max((len(o) for o in OUTCOME_OPTIONS if o in por_outcome), default=0)+2
                 for o in OUTCOME_OPTIONS:
                     if o in por_outcome:
                         avg,c=por_outcome[o]
-                        txt+=f"  {o:<14} {avg:>5.0f}%  (n={c})\n"
+                        txt+=f"  {o:<{w}} {avg:>5.0f}%  (n={c})\n"
                 if total_marcados < 5:
                     txt+=f"  (só {total_marcados} vaga(s) com outcome marcado ainda — poucos dados pra essa comparação ser confiável)\n"
             self.bars_text.delete("1.0",tk.END); self.bars_text.insert("1.0",txt)
