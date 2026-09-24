@@ -111,8 +111,11 @@ O aplicativo operará alternando dinamicamente entre os estados através de um m
   (`%LOCALAPPDATA%\JobAutoFit` → `%LOCALAPPDATA%\VampHunter`).
 - ✅ **Fase 2 (POC CustomTkinter)** — validado visual (cards, canto arredondado, label acima
   do campo, botão primário/outline) e empacotamento PyInstaller.
-- 🔄 **Fase 3 (Paleta de cores)** — `src/theme.py` criado com os 3 temas desta seção; só
-  `CLEAN_TECH` ativo por enquanto.
-- 🔄 **Fase 4 (Reescrita das abas)** — Dashboard (`src/gui_tabs/dashboard.py`) convertido como
-  piloto; as outras 6 abas ainda em ttkbootstrap.
+- ✅ **Fase 3 (Paleta de cores)** — `src/theme.py` criado com os 3 temas desta seção; só
+  `CLEAN_TECH` ativo por enquanto (troca dinâmica fica pra Fase 5).
+- ✅ **Fase 4 (Reescrita das abas)** — as 7 abas convertidas pro CustomTkinter (Dashboard como
+  piloto, depois Currículo, Busca & Filtros, IA & Conexões, Execução, Histórico e Perfil
+  GitHub). Treeview (Histórico/Perfil GitHub) e Progressbar indeterminate (Execução)
+  continuam ttk puro, estilizados via `style_ttk()` em `gui_common.py` — CustomTkinter não
+  tem equivalente nativo pra nenhum dos dois.
 - ⏳ **Fase 5 (Modo Vampiro dinâmico + easter eggs)** — não iniciada.
