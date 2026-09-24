@@ -1,4 +1,4 @@
-import json, os, sys, threading, subprocess, webbrowser, re
+import json, os, sys, threading, subprocess, webbrowser, re, time
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -8,7 +8,7 @@ from ttkbootstrap.constants import *
 import customtkinter as ctk
 
 from config import Config, resource_path
-from theme import get_active_theme
+from theme import get_active_theme, is_vampire_mode, toggle_vampire_mode, label_for
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
@@ -106,6 +106,11 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         self.var_dry_run=tk.BooleanVar(value=True)
         self._build_ui(); self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list(); self._refresh_dashboard()
         self.after(300, self._maybe_show_onboarding)
+        # Fase 5 do blueprint (Modo Vampiro) - "Despertar Noturno": abrir o app entre 00h e
+        # 03h ativa o tema vampiro sozinho, com um banner avisando (o outro gatilho é o
+        # tríplo-clique no morcego escondido no rodapé, ver _on_bat_click).
+        if datetime.now().hour < 3:
+            self.after(400, lambda: self._activate_vampire_mode("🦇 Despertar Noturno — Modo Vampiro ativado automaticamente (00h–03h)"))
         # sem isso, fechar no X perdia edição não salva sem avisar, e se a automação
         # estivesse rodando em background (thread + Playwright/subprocess), fechar a janela
         # matava o processo Python no meio de uma vaga sem chance de interromper com cuidado.
@@ -145,12 +150,63 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
             "3) Revise os campos preenchidos e clique em \"Salvar Tudo\"."
         )
 
+    def _on_bat_click(self, _event=None):
+        """Gatilho manual do Modo Vampiro (blueprint seção 4): 3 cliques no morceguinho
+        escondido no rodapé em até 1.2s. Fica de propósito quase invisível (cor = borda do
+        tema, bem próxima do fundo) - é um easter egg, não um botão de verdade."""
+        now = time.time()
+        self._bat_clicks = [c for c in getattr(self, "_bat_clicks", []) if now - c < 1.2] + [now]
+        if len(self._bat_clicks) >= 3:
+            self._bat_clicks = []
+            self._activate_vampire_mode()
+
+    def _activate_vampire_mode(self, banner_text=None):
+        toggle_vampire_mode()
+        self._rebuild_ui()
+        entering = is_vampire_mode()
+        self._show_banner(banner_text or ("🦇 Modo Vampiro ativado" if entering else "☀ Modo Vampiro desativado — de volta ao Clean Tech"))
+
+    def _show_banner(self, msg):
+        """Faixa temporária no topo da janela (blueprint: 'banner temporário') - usa place()
+        por cima de tudo em vez de disputar espaço no grid do resto da UI, e se auto-destrói
+        sozinha depois de alguns segundos (ou no clique do X)."""
+        t=get_active_theme()
+        banner=ctk.CTkFrame(self, fg_color=t["primary"], corner_radius=0, height=34)
+        banner.place(relx=0, rely=0, relwidth=1, anchor="nw")
+        ctk.CTkLabel(banner, text=msg, text_color="#ffffff", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=14, pady=6)
+        ctk.CTkButton(banner, text="✕", width=26, height=22, fg_color="transparent", hover_color=t["border"],
+                      text_color="#ffffff", command=banner.destroy).pack(side="right", padx=8)
+        self.after(6000, lambda: banner.destroy() if banner.winfo_exists() else None)
+
+    def _rebuild_ui(self):
+        """Reconstrói topo/abas/rodapé do zero com o tema (theme.py) atual - a forma mais
+        simples e confiável de trocar tema em tempo real, já que cada aba lê a paleta via
+        get_active_theme() só na hora de montar os widgets (não observa mudança depois).
+        As tk.Variable (self.var_*) não são recriadas, só reaproveitadas - os dados
+        digitados na tela sobrevivem à troca de tema."""
+        try: current_tab = self.nb.index(self.nb.select())
+        except Exception: current_tab = 0
+        for w in self.winfo_children():
+            w.destroy()
+        self._build_ui()
+        self._bind_work_mode(); self._refresh_skills_list(); self._refresh_exp_list(); self._refresh_edu_list()
+        self._refresh_dashboard(); self._refresh_hist()
+        try: self.nb.select(current_tab)
+        except Exception: pass
+
     def _build_ui(self):
         t=style_ttk()
         # janela toda (tb.Window/"darkly") fica em cima do fundo escuro do ttkbootstrap, que
         # não é exatamente a cor de theme.py - força o mesmo window_bg pra não ter costura de
-        # cor entre o fundo da janela e os cards CustomTkinter por cima.
-        self.configure(bg=t["window_bg"])
+        # cor entre o fundo da janela e os cards CustomTkinter por cima. Só na primeira vez:
+        # chamar de novo num _rebuild_ui() (troca de tema) esbarra num bug do CustomTkinter -
+        # o configure(bg=...) da raiz tenta re-sincronizar todos os widgets CTk já destruídos
+        # e quebra com TclError "invalid command name" num deles. Sem necessidade de repetir
+        # mesmo: uma vez com a cor certa já é suficiente, o fundo da raiz nunca aparece de
+        # verdade (fica 100% coberto pelos frames de cima/notebook/baixo).
+        if not getattr(self, "_root_bg_set", False):
+            self.configure(bg=t["window_bg"])
+            self._root_bg_set = True
         # grid em vez de pack pra topo/notebook/rodapé: com pack, quando a janela era
         # encolhida abaixo da soma das alturas naturais dos 3, o notebook (expand=True)
         # consumia todo o espaço restante e a barra de baixo ("Salvar Tudo" etc, empacotada
@@ -176,11 +232,11 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         self.tab_dash=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
         self.tab_hist=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
         self.tab_profile=ttk.Frame(self.nb, style="Vamp.TFrame", padding=10)
-        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=" 2. Busca & Filtros "); self.nb.add(self.tab_ia,text=" 3. IA & Conexões "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=" 6. Histórico "); self.nb.add(self.tab_profile,text=" 7. Perfil GitHub ")
+        self.nb.add(self.tab_perfil,text=" 1. Currículo "); self.nb.add(self.tab_busca,text=f" {label_for('tab_busca')} "); self.nb.add(self.tab_ia,text=f" {label_for('tab_ia')} "); self.nb.add(self.tab_exec,text=" 4. Execução "); self.nb.add(self.tab_dash,text=" 5. Dashboard "); self.nb.add(self.tab_hist,text=f" {label_for('tab_hist')} "); self.nb.add(self.tab_profile,text=" 7. Perfil GitHub ")
         self._build_perfil(); self._build_busca(); self._build_ia(); self._build_exec(); self._build_dash(); self._build_hist(); self._build_profile()
 
         bottom=ctk.CTkFrame(self, fg_color=t["window_bg"]); bottom.grid(row=2, column=0, sticky="ew", padx=10, pady=(0,10))
-        ctk.CTkButton(bottom,text="Salvar Tudo",width=120,fg_color=t["success"],hover_color=t["border"],
+        ctk.CTkButton(bottom,text=label_for("salvar_tudo"),width=120,fg_color=t["success"],hover_color=t["border"],
                       command=self.save_all).pack(side="left")
         ctk.CTkLabel(bottom,text="Dica: importe PDF/DOCX do currículo na aba Currículo → Importar. Limite diário evita bloqueio no LinkedIn/Gupy.",
                      font=ctk.CTkFont(size=10),text_color=t["text_dim"]).pack(side="left",padx=12)
@@ -189,6 +245,12 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         ctk.CTkButton(bottom,text="Abrir Relatórios",width=130,fg_color="transparent",border_width=1,border_color=t["primary"],
                       text_color=t["primary"],hover_color=t["card_bg"],
                       command=lambda:self._open_folder(BASE_DIR/"reports")).pack(side="right",padx=(0,8))
+        # morceguinho escondido (blueprint seção 4 - gatilho manual do Modo Vampiro): cor
+        # quase igual ao fundo de propósito, só um pouco mais clara pra dar pra encontrar
+        # sabendo que existe. 3 cliques em 1.2s ativa/desativa.
+        bat=ctk.CTkLabel(bottom, text="🦇", font=ctk.CTkFont(size=11), text_color=t["border"], cursor="hand2")
+        bat.pack(side="right", padx=(0,4))
+        bat.bind("<Button-1>", self._on_bat_click)
 
     # Perfil (com import)
     def save_all(self,silent=False):

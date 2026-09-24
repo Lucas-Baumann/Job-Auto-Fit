@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 
 from config import Config
-from theme import get_active_theme
+from theme import get_active_theme, label_for
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
@@ -22,7 +22,7 @@ class ExecucaoTabMixin:
         top=ctk.CTkFrame(f, fg_color="transparent")
         top.pack(fill="x", pady=(0,10))
         ctk.CTkCheckBox(top,text="dry-run (só PDFs + relatório)",variable=self.var_dry_run).pack(side="left")
-        self.btn_run=ctk.CTkButton(top,text="▶ Iniciar Automação",width=180,fg_color=t["success"],
+        self.btn_run=ctk.CTkButton(top,text=label_for("iniciar_automacao"),width=180,fg_color=t["success"],
                                     hover_color=t["border"],command=self.run_automation)
         self.btn_run.pack(side="right")
         self.btn_stop=ctk.CTkButton(top,text="■ Parar",width=100,fg_color="transparent",border_width=1,

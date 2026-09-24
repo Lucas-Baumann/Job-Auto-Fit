@@ -23,7 +23,10 @@ CRIMSON_VELVET = {
     "border": "#4A1521",
     "text": "#F5EFF1",
     "text_dim": "#9C8790",
-    "primary": "#E62E52",
+    # ajustado (2026-09-24): o #E62E52 original tinha azul (B=82) alto demais pro tom de
+    # verde (G=46) - puxava pra rosa/magenta em vez de vermelho-sangue. Reduzido o azul,
+    # brilho mantido (mesmo contraste contra o fundo quase preto).
+    "primary": "#D42A34",
     "success": "#00A86B",
     "danger": "#E5484D",
 }
@@ -53,3 +56,28 @@ def set_active_theme(name: str):
     global _active_theme_name
     if name in THEMES:
         _active_theme_name = name
+
+def is_vampire_mode() -> bool:
+    return _active_theme_name != "clean_tech"
+
+def toggle_vampire_mode():
+    """Liga/desliga o Modo Vampiro (Fase 5) - alterna pro tema Crimson Velvet (o mais
+    "vampiro" dos dois temas escuros do blueprint) e volta pro Clean Tech. Gothic Castle
+    fica disponível pra troca manual futura, mas não faz parte do easter egg dinâmico."""
+    set_active_theme("clean_tech" if is_vampire_mode() else "crimson_velvet")
+
+# Dicionário de termos dinâmicos (blueprint seção 4) - textos que só aparecem trocados
+# quando o Modo Vampiro está ativo. label_for() é a única forma de acessar esses textos
+# pra garantir que a checagem de tema não fique espalhada/duplicada pela GUI.
+VAMPIRE_LABELS = {
+    "tab_busca": ("2. Busca & Filtros", "2. Rastrear Presas"),
+    "tab_ia": ("3. IA & Conexões", "3. Hipnose & Feitiço de IA"),
+    "tab_hist": ("6. Histórico", "6. Vagas Mordidas"),
+    "resumo_profissional": ("Resumo Profissional (IA reescreve mantendo contexto)", "Grimório (IA reescreve mantendo a linhagem)"),
+    "salvar_tudo": ("Salvar Tudo", "Selar Pacto"),
+    "iniciar_automacao": ("▶ Iniciar Automação", "🩸 Atacar Vaga"),
+}
+
+def label_for(key: str) -> str:
+    normal, vamp = VAMPIRE_LABELS[key]
+    return vamp if is_vampire_mode() else normal

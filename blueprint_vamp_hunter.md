@@ -118,4 +118,11 @@ O aplicativo operará alternando dinamicamente entre os estados através de um m
   GitHub). Treeview (Histórico/Perfil GitHub) e Progressbar indeterminate (Execução)
   continuam ttk puro, estilizados via `style_ttk()` em `gui_common.py` — CustomTkinter não
   tem equivalente nativo pra nenhum dos dois.
-- ⏳ **Fase 5 (Modo Vampiro dinâmico + easter eggs)** — não iniciada.
+- ✅ **Fase 5 (Modo Vampiro dinâmico + easter eggs)** — os dois gatilhos da seção 4
+  (tríplo-clique no morcego escondido no rodapé + "Despertar Noturno" 00h-03h), troca pro
+  tema Crimson Velvet com banner temporário, dicionário de termos dinâmicos (abas 2/3/6,
+  "Resumo Profissional"→"Grimório", "Salvar Tudo"→"Selar Pacto", botão de execução→"Atacar
+  Vaga") via `theme.label_for()`, e os dois easter eggs fixos da seção 5 (filtro anti-alho
+  nas skills, mensagem "queimado pelo sol" em arquivo de currículo corrompido). O farejador
+  de erros do Bloodhound (seção 5) não se aplica - o nome escolhido foi VampHunter, não
+  Bloodhound.

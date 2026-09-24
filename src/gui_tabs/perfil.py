@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from config import Config
-from theme import get_active_theme
+from theme import get_active_theme, label_for
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon, card, field, make_scrollable,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
@@ -33,7 +33,7 @@ class PerfilTabMixin:
         ctk.CTkButton(btn_wrap,text="Importar PDF/DOCX/TXT",fg_color="transparent",border_width=1,border_color=t["primary"],
                       text_color=t["primary"],hover_color=t["card_bg"],command=self.import_cv_file).pack(side="bottom",fill="x")
 
-        outer, content = card(inner, "Resumo Profissional (IA reescreve mantendo contexto)")
+        outer, content = card(inner, label_for("resumo_profissional"))
         outer.pack(fill="x", pady=(0,10))
         self.txt_summary=tk.Text(content,height=4,wrap="word",bg=t["window_bg"],fg=t["text"],
                                   insertbackground=t["text"],borderwidth=0,highlightthickness=0)
@@ -75,9 +75,17 @@ class PerfilTabMixin:
     def _refresh_skills_list(self):
         self.lst_skills.delete(0,tk.END)
         for s in self.curriculum.get("skills",[]): self.lst_skills.insert(tk.END,s)
+    # blueprint seção 5 ("Recursos Extras de Gamificação") - filtro anti-alho: easter egg
+    # fixo, não depende do Modo Vampiro estar ligado.
+    _GARLIC_WORDS = ("alho", "cruz", "vampiro")
     def add_skill(self):
         v=self.ent_skill.get().strip()
-        if v: self.curriculum.setdefault("skills",[]).append(v); self.ent_skill.delete(0,tk.END); self._refresh_skills_list()
+        if not v: return
+        if any(w in v.lower() for w in self._GARLIC_WORDS):
+            self.ent_skill.delete(0,tk.END)
+            messagebox.showwarning("VampHunter", "[Erro]: Ingrediente tóxico detectado para o sistema VampHunter. Acesso negado.")
+            return
+        self.curriculum.setdefault("skills",[]).append(v); self.ent_skill.delete(0,tk.END); self._refresh_skills_list()
     def del_skill(self):
         sel=self.lst_skills.curselection()
         if sel: self.curriculum["skills"].pop(sel[0]); self._refresh_skills_list()
@@ -196,7 +204,11 @@ class PerfilTabMixin:
                 messagebox.showwarning("Importar — revise os campos",msg)
             else:
                 messagebox.showinfo("Importar",msg + "\n\n✓ IA usada para melhor análise.")
-        except Exception as e: messagebox.showerror("Importar",str(e))
+        except Exception as e:
+            # blueprint seção 5 - "Efeito Queimado pelo Sol": arquivo que não deu pra ler
+            # (corrompido/formato inesperado) ganha uma mensagem temática em vez do erro seco,
+            # mas mantém o detalhe técnico embaixo pra quem precisar depurar de verdade.
+            messagebox.showerror("Importar", "Este arquivo virou cinzas ao entrar em contato com a luz do dia. Use apenas PDFs protegidos pelas sombras.\n\n(detalhe técnico: " + str(e) + ")")
     def suggest_mandatory(self):
         skills = self.curriculum.get("skills", [])
         if not skills:
