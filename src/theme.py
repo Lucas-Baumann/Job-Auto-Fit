@@ -153,3 +153,12 @@ def apply_ctk_defaults(theme=None):
         "text_color": [t["text"], t["text"]]})
     ctk.ThemeManager.theme["CTkScrollbar"].update({
         "button_color": [t["border"], t["border"]], "button_hover_color": [t["primary"], t["primary"]]})
+    # A raiz de verdade do problema (achada depurando pixel a pixel): todo widget CTk é
+    # desenhado sobre um Canvas próprio, e quando não dá pra descobrir a cor real do pai (bg_
+    # color) subindo a árvore - nosso caso, já que a janela raiz é um tb.Window/ttkbootstrap,
+    # não um ctk.CTk de verdade - ele cai nesse default global ThemeManager.theme["CTk"]
+    # ("gray14" no modo escuro, ~#242424) pra pintar o canvas por trás do conteúdo. Isso
+    # sobra como cantos/linhas escuras em qualquer widget arredondado ou com borda (card(),
+    # CTkLabel solto, etc.) cujo bg_color não foi passado explicitamente - sobrescrever aqui
+    # cobre TODOS esses casos de uma vez, em vez de caçar cada widget um por um.
+    ctk.ThemeManager.theme["CTk"]["fg_color"] = [t["window_bg"], t["window_bg"]]

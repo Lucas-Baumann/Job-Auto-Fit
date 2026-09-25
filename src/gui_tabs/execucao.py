@@ -19,7 +19,15 @@ class ExecucaoTabMixin:
         f=self.tab_exec
         t=style_ttk()
 
-        top=ctk.CTkFrame(f, fg_color="transparent")
+        # tk.Frame puro (não CTkFrame) - esta aba não passa por make_scrollable()/card() como
+        # as outras, então fica parentada direto na aba crua (ttk.Frame, sem cor resolvível
+        # pelo CustomTkinter). CTkFrame(fg_color=..., corner_radius=0) ainda deixava uma linha
+        # escura fina sob a fileira (renderização em canvas do CTkFrame usa uma cor própria
+        # pra máscara de canto que não é a mesma coisa que fg_color, e ela não seguia o tema
+        # mesmo com corner_radius=0) - só um container de layout (checkbox + botões), não
+        # precisa de nada que o CTkFrame ofereça além da cor sólida, então tk.Frame resolve
+        # sem esse problema.
+        top=tk.Frame(f, bg=t["window_bg"])
         top.pack(fill="x", pady=(0,10))
         ctk.CTkCheckBox(top,text="dry-run (só PDFs + relatório)",variable=self.var_dry_run).pack(side="left")
         self.btn_run=ctk.CTkButton(top,text=label_for("iniciar_automacao"),width=180,fg_color=t["success"],
@@ -33,7 +41,7 @@ class ExecucaoTabMixin:
         self.progress=ttk.Progressbar(f,mode="indeterminate",style="Vamp.Horizontal.TProgressbar")
         self.progress.pack(fill="x",pady=(0,10))
 
-        log_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        log_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"], bg_color=t["window_bg"])
         log_outer.pack(fill="both",expand=True,pady=(0,10))
         log_frame=ctk.CTkFrame(log_outer, fg_color="transparent")
         log_frame.pack(fill="both",expand=True,padx=10,pady=10)
@@ -58,7 +66,7 @@ class ExecucaoTabMixin:
         self._log("Pronto. Clique em Iniciar.\n")
         self.after(80, self._drain_log_queue)
 
-        row=ctk.CTkFrame(f, fg_color="transparent")
+        row=tk.Frame(f, bg=t["window_bg"])
         row.pack(fill="x")
         ctk.CTkButton(row,text="Abrir último HTML",width=140,command=self.open_last_report).pack(side="left",padx=(0,8))
         ctk.CTkButton(row,text="Pasta OUTPUT",width=120,fg_color="transparent",border_width=1,
@@ -71,7 +79,7 @@ class ExecucaoTabMixin:
         ctk.CTkButton(row,text="Limpar log",width=100,fg_color="transparent",border_width=1,
                       border_color=t["border"],text_color=t["text_dim"],hover_color=t["card_bg"],
                       command=lambda:self.log.text.delete("1.0",tk.END)).pack(side="right")
-        self.lbl_exec_ai=ctk.CTkLabel(f,text="",font=ctk.CTkFont(size=11),text_color=t["text_dim"],anchor="w")
+        self.lbl_exec_ai=ctk.CTkLabel(f,text="",font=ctk.CTkFont(size=11),text_color=t["text_dim"],anchor="w",fg_color=t["window_bg"],bg_color=t["window_bg"])
         self.lbl_exec_ai.pack(fill="x", pady=(6,0))
     def _log(self,msg):
         """Thread-safe: pode ser chamado tanto do thread principal quanto da thread do

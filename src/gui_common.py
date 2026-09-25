@@ -50,9 +50,17 @@ def card(parent, title, theme=None):
     """Container com canto arredondado + título em negrito no topo, substitui o antigo
     tb.Labelframe (borda fina colorida) - ver blueprint_vamp_hunter.md secao 3.B.
     Retorna (frame_externo, frame_conteudo); os widgets do chamador vao dentro do conteudo,
-    o titulo ja fica fora reservado."""
+    o titulo ja fica fora reservado.
+
+    bg_color explícito (window_bg, não deixado no default do CustomTkinter): com canto
+    arredondado (corner_radius>0) + borda (border_width>0) juntos, o CTkFrame usa bg_color -
+    não fg_color - como referência de cor pra suavizar/mascarar os cantos e a borda contra o
+    que tem por trás. Sem passar isso, ricocheteava até um cinza-escuro fixo do ttkbootstrap
+    antigo (não lia theme.py) e sobrava uma linha escura fina em volta do card - só não
+    aparecia nos temas escuros por coincidência de tom com esse cinza."""
     t = theme or get_active_theme()
-    outer = ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+    outer = ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1,
+                          border_color=t["border"], bg_color=t["window_bg"])
     if title:
         ctk.CTkLabel(outer, text=title, text_color=t["text"], anchor="w",
                      font=ctk.CTkFont(weight="bold")).pack(fill="x", padx=14, pady=(12,2))

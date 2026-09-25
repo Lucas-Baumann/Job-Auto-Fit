@@ -93,7 +93,7 @@ class DashboardTabMixin:
         borda direita, enquanto o card de distribuição logo abaixo vai até o fim (fill="both"
         sem padx) - as duas larguras ficavam visualmente desalinhadas."""
         t=get_active_theme()
-        tile=ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        tile=ctk.CTkFrame(parent, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"], bg_color=t["window_bg"])
         tile.pack(side="left", fill="x", expand=True, padx=(0,0 if last else 10))
         lbl_value=ctk.CTkLabel(tile, text=value, text_color=accent_color, font=ctk.CTkFont(size=22, weight="bold"))
         lbl_value.pack(anchor="w", padx=16, pady=(12,0))

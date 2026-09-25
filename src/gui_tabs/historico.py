@@ -63,7 +63,7 @@ class HistoricoTabMixin:
         self._hist_col_to_sql={"vaga":"title","empresa":"company","local":"location","match":"match_score","status":"status","outcome":"outcome","plataforma":"platform"}
         # nenhuma coluna ordenada por padrão -> ordem natural (mais recente primeiro, por id)
         self._hist_sort_col=None; self._hist_sort_dir=None
-        tree_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"])
+        tree_outer=ctk.CTkFrame(f, fg_color=t["card_bg"], corner_radius=10, border_width=1, border_color=t["border"], bg_color=t["window_bg"])
         tree_outer.pack(fill="both",expand=True)
         self.tree=ttk.Treeview(tree_outer,columns=cols,show="headings",height=14,style="Vamp.Treeview")
         for c in cols: self.tree.heading(c,command=lambda c=c:self._sort_hist_by(c))
