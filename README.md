@@ -4,6 +4,8 @@
 
 O **VampHunter** é uma solução completa em Python (GUI + CLI) criada para automatizar a busca de vagas (LinkedIn, Gupy e APIs abertas), otimizar seu currículo para passar pelos filtros automáticos (ATS) utilizando IA gratuita, realizar o envio de candidaturas e acompanhar o resultado de cada uma.
 
+![Dashboard do VampHunter](docs/screenshots/05_dashboard.png)
+
 ---
 
 ## 📥 Download (sem instalar Python)
@@ -32,19 +34,54 @@ Depois de baixar, veja a seção **"🛠️ Configuração"** mais abaixo — o 
 
 ## 🖥️ Usando pela Interface Gráfica (recomendado)
 
-Abra `VampHunter.exe` / `./VampHunter-linux`, ou rode `python gui.py` a partir do código-fonte. A janela tem 7 abas:
+Abra `VampHunter.exe` / `./VampHunter-linux`, ou rode `python gui.py` a partir do código-fonte. A janela tem 7 abas. Clique em **"Salvar Tudo"** (rodapé) para persistir qualquer alteração — as capturas abaixo usam dados fictícios só pra ilustrar cada aba.
 
-| Aba | Para que serve |
-|---|---|
-| **1. Currículo** | Dados pessoais, resumo, skills, experiências e formação. Botão **"Importar PDF/DOCX/TXT"** preenche tudo automaticamente (via IA, se configurada na aba 3 — sem IA, usa um modo heurístico mais limitado). |
-| **2. Busca & Filtros** | Palavras-chave, modo de trabalho, salário mínimo, nível, empresas bloqueadas/favoritas, limite diário, Telegram, agendamento — ver tabela completa na seção **"🔍 Filtros de busca"** mais abaixo. |
-| **3. IA & Conexões** | Provedor de IA + chave, SMTP, token do GitHub, credenciais LinkedIn/Gupy. |
-| **4. Execução** | Roda o pipeline completo (coleta → filtro → ATS → envio → relatório) com log em tempo real; permite preview do PDF antes de rodar de verdade. |
-| **5. Dashboard** | Métricas agregadas: total de vagas processadas, match médio, distribuição de resultado. |
-| **6. Histórico** | Lista de vagas já processadas — duplo clique pra detalhes, "Aprovar e Enviar" para candidaturas pendentes, marcação manual do resultado. |
-| **7. Perfil GitHub** | Gera e publica README de perfil e de repositórios do seu GitHub. |
+### 1. Currículo
+Dados pessoais, resumo, skills, experiências e formação. Botão **"Importar PDF/DOCX/TXT"** preenche tudo automaticamente (via IA, se configurada na aba 3 — sem IA, usa um modo heurístico mais limitado).
 
-Clique em **"Salvar Tudo"** (rodapé) para persistir qualquer alteração.
+![Aba Currículo](docs/screenshots/01_curriculo.png)
+
+### 2. Busca & Filtros
+Palavras-chave, modo de trabalho, salário mínimo, nível, empresas bloqueadas/favoritas, limite diário, Telegram, agendamento — ver tabela completa na seção **"🔍 Filtros de busca"** mais abaixo.
+
+![Aba Busca & Filtros](docs/screenshots/02_busca.png)
+
+### 3. IA & Conexões
+Provedor de IA + chave, SMTP, token do GitHub, credenciais LinkedIn/Gupy.
+
+![Aba IA & Conexões](docs/screenshots/03_ia.png)
+
+### 4. Execução
+Roda o pipeline completo (coleta → filtro → ATS → envio → relatório) com log em tempo real colorizado (verde/vermelho/azul); permite preview do PDF antes de rodar de verdade.
+
+![Aba Execução](docs/screenshots/04_execucao.png)
+
+### 5. Dashboard
+Métricas agregadas: total de vagas processadas, match médio, distribuição por status/plataforma, comparação entre o score da IA e o resultado real de cada candidatura, e a lista das vagas mais recentes.
+
+![Aba Dashboard](docs/screenshots/05_dashboard.png)
+
+### 6. Histórico
+Lista de vagas já processadas — duplo clique pra detalhes, "Aprovar e Enviar" para candidaturas pendentes, marcação de outcome e exclusão em lote (seleção múltipla com ctrl/shift+clique).
+
+![Aba Histórico](docs/screenshots/06_historico.png)
+
+### 7. Perfil GitHub
+Gera e publica README de perfil e de repositórios do seu GitHub, usando IA para analisar linguagens/estrelas/tópicos reais de cada repositório.
+
+![Aba Perfil GitHub](docs/screenshots/07_perfil_github.png)
+
+---
+
+## 🎨 Temas
+
+O seletor no topo da janela troca a paleta de cores do app inteiro (persiste entre execuções). Além do **Clean Tech** (padrão, mostrado nas capturas acima), tem mais 8 temas prontos:
+
+| | | |
+|---|---|---|
+| **Daylight**<br>![Daylight](docs/screenshots/theme_daylight.png) | **Gothic Castle**<br>![Gothic Castle](docs/screenshots/theme_gothic_castle.png) | **Nightfall**<br>![Nightfall](docs/screenshots/theme_nightfall.png) |
+| **Silver Fang**<br>![Silver Fang](docs/screenshots/theme_silver_fang.png) | **Wolfsbane**<br>![Wolfsbane](docs/screenshots/theme_wolfsbane.png) | **Ashen Crypt**<br>![Ashen Crypt](docs/screenshots/theme_ashen_crypt.png) |
+| **Amber Candlelight**<br>![Amber Candlelight](docs/screenshots/theme_amber_candlelight.png) | **Raven's Shadow**<br>![Raven's Shadow](docs/screenshots/theme_ravens_shadow.png) | 🦇 *e tem mais um, escondido...* |
 
 ---
 
@@ -133,15 +170,15 @@ cp curriculum_base.example.json curriculum_base.json
 
 ---
 
-## 📊 Dashboard, Histórico e acompanhamento de resultado
+## 📊 Dashboard e Histórico — onde ficam os dados
 
-A aba **Dashboard** mostra métricas agregadas (vagas processadas, match médio, distribuição de resultado). A aba **Histórico** lista cada vaga individualmente: duplo clique para detalhes, **"Aprovar e Enviar"** para candidaturas pendentes de revisão manual, e marcação do resultado real conforme o retorno das empresas for chegando. Todo esse histórico fica local, em `jobs.db` — nunca sai do seu computador.
+Todo o histórico (abas 5 e 6) fica local, em `jobs.db` — nunca sai do seu computador. Nada é enviado para nenhum servidor externo além das próprias plataformas de vaga/IA que você configurar.
 
 ---
 
-## 🧑‍💻 Perfil GitHub (aba 7)
+## 🧑‍💻 Perfil GitHub — publicando direto
 
-Gera automaticamente um README de perfil (`github.com/SEU_USUARIO/SEU_USUARIO`) e READMEs individuais de repositórios, usando IA para analisar linguagens, estrelas e tópicos reais de cada repo (com fallback heurístico caso a IA falhe ou não esteja configurada). Publicar direto no GitHub requer `GITHUB_TOKEN` com escopo `repo`; sem token, o conteúdo é gerado normalmente, só não é enviado sozinho.
+Publicar direto no GitHub (aba 7) requer `GITHUB_TOKEN` com escopo `repo`; sem token, o conteúdo é gerado normalmente, só não é enviado sozinho — você copia manualmente.
 
 ---
 
