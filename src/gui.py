@@ -8,11 +8,12 @@ from ttkbootstrap.constants import *
 import customtkinter as ctk
 
 from config import Config, resource_path
-from theme import get_active_theme, is_vampire_mode, toggle_vampire_mode, label_for
+from theme import get_active_theme, is_vampire_mode, toggle_vampire_mode, label_for, set_active_theme
 from gui_common import (
     OUTCOME_OPTIONS, Tooltip, info_icon, style_ttk,
     BASE_DIR, CURRICULUM_PATH, ENV_PATH, ENV_EXAMPLE, SEARCH_CONFIG_PATH, DB_PATH,
     load_curriculum, save_curriculum, load_env_dict, save_env_dict, load_search_config, save_search_config,
+    load_ui_prefs, save_ui_prefs,
 )
 
 # Bump global de 12% no tamanho de widgets/fonte do CustomTkinter (afeta entry/combobox/
@@ -50,6 +51,11 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         _x=(self.winfo_screenwidth()-_w)//2; _y=(self.winfo_screenheight()-_h)//2
         self.geometry(f"{_w}x{_h}+{max(0,_x)}+{max(0,_y)}")
         self.curriculum=load_curriculum(); self.env=load_env_dict(); self.search_cfg=load_search_config()
+        # tema escolhido no seletor manual persiste entre execuções - sem isso, o app sempre
+        # abria de volta no Clean Tech mesmo depois de escolher outro tema (set_active_theme
+        # recusa sozinho "crimson_velvet" caso o arquivo esteja corrompido/editado à mão, ele
+        # é exclusivo do Modo Vampiro e nunca deve ser o tema de abertura).
+        set_active_theme(load_ui_prefs().get("theme", "clean_tech"))
         try:
             # garante que jobs.db exista com o schema atual (colunas/tabelas novas) antes de
             # qualquer leitura do Dashboard/Histórico — antes só main.py chamava init_db()
@@ -228,10 +234,12 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         # "normais" (Crimson Velvet fica de fora - exclusivo do Modo Vampiro, ver theme.py) e
         # NÃO mexe no Modo Vampiro: escolher Gothic Castle aqui não vira easter egg, fica só
         # com a paleta escura séria mesmo, sem os textos remapeados.
-        from theme import THEME_DISPLAY_NAMES, get_manual_theme_name, set_active_theme
+        from theme import THEME_DISPLAY_NAMES, get_manual_theme_name
         def _on_theme_pick(display_name):
             rev={v:k for k,v in THEME_DISPLAY_NAMES.items()}
-            set_active_theme(rev.get(display_name,"clean_tech"))
+            chosen=rev.get(display_name,"clean_tech")
+            set_active_theme(chosen)
+            save_ui_prefs({"theme": chosen})
             self._rebuild_ui()
         combo_theme=ctk.CTkComboBox(top,values=list(THEME_DISPLAY_NAMES.values()),state="readonly",
                                      width=175,command=_on_theme_pick)

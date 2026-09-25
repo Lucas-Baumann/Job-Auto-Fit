@@ -229,6 +229,12 @@ def apply_ctk_defaults(theme=None):
         "text_color": [t["text"], t["text"]]})
     ctk.ThemeManager.theme["CTkScrollbar"].update({
         "button_color": [t["border"], t["border"]], "button_hover_color": [t["primary"], t["primary"]]})
+    # menu suspenso do CTkComboBox (a listinha que abre ao clicar na setinha) é um widget
+    # separado (DropdownMenu) com seu próprio default, nunca coberto até agora - mesma classe
+    # de problema, só que só aparece com o menu aberto (fácil de passar despercebido testando).
+    ctk.ThemeManager.theme["DropdownMenu"].update({
+        "fg_color": [t["card_bg"], t["card_bg"]], "hover_color": [t["border"], t["border"]],
+        "text_color": [t["text"], t["text"]]})
     # A raiz de verdade do problema (achada depurando pixel a pixel): todo widget CTk é
     # desenhado sobre um Canvas próprio, e quando não dá pra descobrir a cor real do pai (bg_
     # color) subindo a árvore - nosso caso, já que a janela raiz é um tb.Window/ttkbootstrap,

@@ -10,6 +10,7 @@ github_selection.json
 presets.json
 curriculum_base.json
 *_session.json
+ui_prefs.json
 
 # Gerados
 logs/

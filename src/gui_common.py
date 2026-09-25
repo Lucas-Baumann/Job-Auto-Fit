@@ -221,3 +221,16 @@ def load_search_config():
         except: pass
     return {"keywords":["Desenvolvedor Python","Python Developer"],"work_mode":"remoto","presencial_location":"","contract_type":"indiferente","min_score":60,"limit_per_source":8,"min_salary":0,"level":"indiferente","exclude_keywords":[],"mandatory_words":[],"blocked_companies":[],"max_age_days":0,"only_pcd":False,"english_filter":"indiferente","daily_limit":20,"enable_linkedin_posts":True,"linkedin_posts_limit":8,"auto_send":True}
 def save_search_config(c): SEARCH_CONFIG_PATH.write_text(json.dumps(c,ensure_ascii=False,indent=2),encoding="utf-8")
+
+# Preferência de tema (seletor manual) - arquivo próprio em vez de emendar em
+# search_config.json/.env porque não é uma configuração de busca nem de credencial, é só uma
+# preferência de UI; separar deixa claro o que é o quê e evita que uma trocar quebre o outro.
+UI_PREFS_PATH = BASE_DIR / "ui_prefs.json"
+def load_ui_prefs():
+    if UI_PREFS_PATH.exists():
+        try: return json.loads(UI_PREFS_PATH.read_text(encoding="utf-8"))
+        except Exception: pass
+    return {}
+def save_ui_prefs(d):
+    try: UI_PREFS_PATH.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception: pass
