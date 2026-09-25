@@ -61,10 +61,86 @@ DAYLIGHT = {
     "danger": "#C81E3A",
 }
 
-THEMES = {"clean_tech": CLEAN_TECH, "crimson_velvet": CRIMSON_VELVET, "gothic_castle": GOTHIC_CASTLE, "daylight": DAYLIGHT}
+NIGHTFALL = {
+    "window_bg": "#12101F",
+    "card_bg": "#1E1B34",
+    "border": "#3A3260",
+    "text": "#E4E1F5",
+    "text_dim": "#8B85B0",
+    "primary": "#8B5CF6",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+SILVER_FANG = {
+    "window_bg": "#11161C",
+    "card_bg": "#1B232C",
+    "border": "#3A4552",
+    "text": "#D8E1E8",
+    "text_dim": "#7E8C99",
+    "primary": "#5EC2E8",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+WOLFSBANE = {
+    "window_bg": "#101511",
+    "card_bg": "#1A211B",
+    "border": "#33402F",
+    "text": "#DDEBD9",
+    "text_dim": "#7D8F78",
+    "primary": "#63C132",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+ASHEN_CRYPT = {
+    "window_bg": "#131313",
+    "card_bg": "#1C1C1C",
+    "border": "#3A3A3A",
+    "text": "#E8E4DC",
+    "text_dim": "#8A8680",
+    # tema monocromático de propósito - o destaque vem de ser mais saturado/quente (tom
+    # "latão/osso") que o cinza puro do resto, não de mudar de família de cor.
+    "primary": "#B5A888",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+AMBER_CANDLELIGHT = {
+    "window_bg": "#171009",
+    "card_bg": "#231A0F",
+    "border": "#4A3620",
+    "text": "#F0E4D0",
+    "text_dim": "#A08F70",
+    "primary": "#E0A83E",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+RAVENS_SHADOW = {
+    "window_bg": "#0B1414",
+    "card_bg": "#132020",
+    "border": "#2C4444",
+    "text": "#DCEAEA",
+    "text_dim": "#7A9494",
+    "primary": "#4FD6D6",
+    "success": "#00A86B",
+    "danger": "#E5484D",
+}
+
+THEMES = {
+    "clean_tech": CLEAN_TECH, "crimson_velvet": CRIMSON_VELVET, "gothic_castle": GOTHIC_CASTLE, "daylight": DAYLIGHT,
+    "nightfall": NIGHTFALL, "silver_fang": SILVER_FANG, "wolfsbane": WOLFSBANE, "ashen_crypt": ASHEN_CRYPT,
+    "amber_candlelight": AMBER_CANDLELIGHT, "ravens_shadow": RAVENS_SHADOW,
+}
 # Só os temas "normais" aparecem no seletor manual (gui.py) - Crimson Velvet é exclusivo do
 # Modo Vampiro (easter egg, ver toggle_vampire_mode), nunca escolhível direto no dropdown.
-THEME_DISPLAY_NAMES = {"clean_tech": "Clean Tech", "gothic_castle": "Gothic Castle", "daylight": "Daylight"}
+THEME_DISPLAY_NAMES = {
+    "clean_tech": "Clean Tech", "gothic_castle": "Gothic Castle", "daylight": "Daylight",
+    "nightfall": "Nightfall", "silver_fang": "Silver Fang", "wolfsbane": "Wolfsbane",
+    "ashen_crypt": "Ashen Crypt", "amber_candlelight": "Amber Candlelight", "ravens_shadow": "Raven's Shadow",
+}
 
 # Paleta categórica fixa pra gráficos (Dashboard) - ordem fixa, nunca ciclada/gerada (ver
 # skill de dataviz: "assign categorical hues in fixed order"). Matizes bem distintos entre

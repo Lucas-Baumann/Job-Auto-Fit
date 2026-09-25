@@ -129,11 +129,19 @@ def style_ttk(theme=None):
     style.configure("Vamp.Horizontal.TProgressbar", background=t["primary"], troughcolor=t["card_bg"],
                      bordercolor=t["border"], lightcolor=t["primary"], darkcolor=t["primary"])
     style.configure("Vamp.TFrame", background=t["window_bg"])
-    style.configure("Vamp.TNotebook", background=t["window_bg"], borderwidth=0)
+    # bordercolor/darkcolor/lightcolor: sem isso, a linha que separa as abas e a moldura ao
+    # redor do conteúdo do Notebook ficam presas no cinza fixo do ttkbootstrap antigo
+    # (#454545), a mesma classe de bug já corrigida em outros lugares - aqui é estilo ttk
+    # puro (engine 'clam'), não CustomTkinter, mas a causa é a mesma ideia: cor que nunca foi
+    # conectada ao tema ativo.
+    style.configure("Vamp.TNotebook", background=t["window_bg"], borderwidth=1,
+                     bordercolor=t["border"], darkcolor=t["border"], lightcolor=t["border"])
     style.configure("Vamp.TNotebook.Tab", background=t["card_bg"], foreground=t["text_dim"],
-                     padding=(14,8), borderwidth=0, focuscolor=t["window_bg"])
+                     padding=(14,8), borderwidth=1, bordercolor=t["border"],
+                     darkcolor=t["border"], lightcolor=t["border"], focuscolor=t["window_bg"])
     style.map("Vamp.TNotebook.Tab", background=[("selected", t["primary"])],
-              foreground=[("selected", "#ffffff")])
+              foreground=[("selected", "#ffffff")],
+              bordercolor=[("selected", t["primary"])])
     return t
 
 def make_scrollable(parent, fg_color=None, theme=None):

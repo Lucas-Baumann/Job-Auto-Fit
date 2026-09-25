@@ -234,7 +234,7 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
             set_active_theme(rev.get(display_name,"clean_tech"))
             self._rebuild_ui()
         combo_theme=ctk.CTkComboBox(top,values=list(THEME_DISPLAY_NAMES.values()),state="readonly",
-                                     width=140,command=_on_theme_pick)
+                                     width=175,command=_on_theme_pick)
         combo_theme.set(THEME_DISPLAY_NAMES[get_manual_theme_name()])
         combo_theme.pack(side="right",padx=(0,10))
 
