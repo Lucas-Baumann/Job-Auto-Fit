@@ -33,6 +33,9 @@ class HistoricoTabMixin:
         ctk.CTkLabel(top,text="Histórico (jobs.db) — duplo clique abre vaga. Clique no cabeçalho da coluna ordena (crescente → decrescente → sem ordenação)",
                      text_color=t["text_dim"],justify="left",anchor="w").pack(fill="x",pady=(4,8))
 
+        # 2 fileiras em vez de uma só - com os 5 botões (+ excluir selecionadas, que não
+        # cabia) numa linha só, o último ficava cortado pela borda do card (pack não
+        # quebra linha sozinho quando estoura a largura disponível).
         actions=ctk.CTkFrame(top, fg_color="transparent"); actions.pack(fill="x")
         self.btn_approve_send=ctk.CTkButton(actions,text="✔ Aprovar e Enviar (selecionada)",fg_color=t["success"],
                                              hover_color=t["border"],command=self.approve_and_send_selected)
@@ -40,14 +43,19 @@ class HistoricoTabMixin:
         info_icon(actions,"Só funciona em vagas com status 'ready_to_send' (fila de revisão — ative em\nBusca & Filtros → desmarcar 'Enviar automaticamente'). Envia com o PDF/carta já gerados.").pack(side="left")
         ctk.CTkButton(actions,text="📝 Marcar Outcome",fg_color="transparent",border_width=1,border_color=t["primary"],
                       text_color=t["primary"],hover_color=t["window_bg"],command=self.mark_job_outcome).pack(side="left",padx=(16,4))
-        info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...).\nÚtil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side="left")
+        info_icon(actions,"Registra o resultado real da candidatura (entrevista, rejeitado, proposta...) - aceita\nselecionar várias vagas de uma vez (ctrl/shift+clique na lista) e marca o mesmo outcome\npra todas. Útil para no futuro avaliar se o score da IA realmente prediz sucesso.").pack(side="left")
         self.btn_gen_docs=ctk.CTkButton(actions,text="📄 Gerar PDF/Carta",fg_color="transparent",border_width=1,
                                          border_color=t["primary"],text_color=t["primary"],hover_color=t["window_bg"],
                                          command=self.generate_docs_selected)
         self.btn_gen_docs.pack(side="left",padx=(16,4))
         info_icon(actions,"Gera currículo otimizado + carta de apresentação pra vaga selecionada, mesmo que o\nmatch esteja abaixo do piso automático (50%) — dispara uma chamada de IA na hora.").pack(side="left")
-        ctk.CTkButton(actions,text="📂 Abrir PDF/Carta",fg_color="transparent",border_width=1,border_color=t["border"],
-                      text_color=t["text"],hover_color=t["window_bg"],command=self.open_docs_selected).pack(side="left",padx=(16,0))
+
+        actions2=ctk.CTkFrame(top, fg_color="transparent"); actions2.pack(fill="x", pady=(8,0))
+        ctk.CTkButton(actions2,text="📂 Abrir PDF/Carta",fg_color="transparent",border_width=1,border_color=t["border"],
+                      text_color=t["text"],hover_color=t["window_bg"],command=self.open_docs_selected).pack(side="left")
+        ctk.CTkButton(actions2,text="🗑 Excluir Selecionadas",fg_color="transparent",border_width=1,border_color=t["danger"],
+                      text_color=t["danger"],hover_color=t["window_bg"],command=self.delete_selected_jobs).pack(side="left",padx=(16,4))
+        info_icon(actions2,"Apaga só as vagas selecionadas (ctrl/shift+clique na lista) do Histórico e do Dashboard -\ndiferente de 'Limpar Histórico', que apaga tudo de uma vez. Opção de apagar junto o\nPDF/carta gerados pra elas.").pack(side="left")
 
         cols=("vaga","empresa","local","match","status","outcome","plataforma")
         self._hist_col_labels={"vaga":"Vaga","empresa":"Empresa","local":"Local","match":"Match","status":"Status","outcome":"Outcome","plataforma":"Plataforma"}
@@ -213,20 +221,65 @@ class HistoricoTabMixin:
     def mark_job_outcome(self):
         sel=self.tree.selection()
         if not sel: messagebox.showinfo("Outcome","Selecione uma vaga na lista."); return
-        job_id=int(sel[0])
+        job_ids=[int(s) for s in sel]
         t=get_active_theme()
-        top=ctk.CTkToplevel(self); top.title("Atualizar Outcome"); top.geometry("360x160"); top.transient(self); top.grab_set()
-        ctk.CTkLabel(top,text="Resultado real da candidatura:").pack(anchor="w",padx=10,pady=(14,6))
+        top=ctk.CTkToplevel(self); top.title("Atualizar Outcome"); top.geometry("380x160"); top.transient(self); top.grab_set()
+        label_txt="Resultado real da candidatura:" if len(job_ids)==1 else f"Resultado real da candidatura ({len(job_ids)} vagas selecionadas):"
+        ctk.CTkLabel(top,text=label_txt).pack(anchor="w",padx=10,pady=(14,6))
         var_outcome=tk.StringVar(value="sem_resposta")
         ctk.CTkComboBox(top,variable=var_outcome,values=OUTCOME_OPTIONS,state="readonly").pack(fill="x",padx=10)
         def save():
             try:
                 from db import update_job_outcome
-                update_job_outcome(job_id, var_outcome.get())
+                for jid in job_ids:
+                    update_job_outcome(jid, var_outcome.get())
                 self._refresh_hist(); self._refresh_dashboard()
             except Exception as e: messagebox.showerror("Outcome",str(e))
             top.destroy()
         ctk.CTkButton(top,text="Salvar",fg_color=t["success"],hover_color=t["border"],command=save).pack(pady=14)
+    def delete_selected_jobs(self):
+        sel=self.tree.selection()
+        if not sel: messagebox.showinfo("Excluir Selecionadas","Selecione ao menos uma vaga na lista."); return
+        job_ids=[int(s) for s in sel]
+        if not messagebox.askyesno(
+            "Excluir Selecionadas",
+            f"Isso apaga {len(job_ids)} vaga(s) selecionada(s) do Histórico e do Dashboard.\n"
+            "Essa ação não pode ser desfeita. Continuar?",
+            icon="warning",
+        ):
+            return
+        also_delete_files = messagebox.askyesno(
+            "Excluir Selecionadas",
+            "Também apagar os PDFs de currículo e cartas de apresentação gerados pra essas vagas?\n"
+            "Se disser não, os arquivos ficam no disco (órfãos, sem vaga associada no histórico)."
+        )
+        try:
+            import sqlite3
+            con = sqlite3.connect(str(DB_PATH)); cur = con.cursor()
+            placeholders = ",".join("?"*len(job_ids))
+            removed = 0
+            if also_delete_files:
+                cur.execute(f"SELECT resume_pdf_path, cover_letter_path FROM jobs WHERE id IN ({placeholders})", job_ids)
+                for resume_path, cover_path in cur.fetchall():
+                    for p in (resume_path, cover_path):
+                        if p:
+                            try:
+                                Path(p).unlink(missing_ok=True)
+                                removed += 1
+                            except Exception:
+                                pass
+            # diferente de clear_history() (apaga a tabela toda), aqui é uma exclusão parcial -
+            # não mexe em sqlite_sequence, isso resetaria o autoincrement mesmo com vagas
+            # restantes na tabela.
+            cur.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", job_ids)
+            con.commit(); con.close()
+            self._refresh_hist(); self._refresh_dashboard()
+            msg = f"{len(job_ids)} vaga(s) excluída(s)."
+            if also_delete_files:
+                msg += f"\n{removed} arquivo(s) apagado(s) de output/."
+            messagebox.showinfo("Excluir Selecionadas", msg)
+        except Exception as e:
+            messagebox.showerror("Excluir Selecionadas", str(e))
     def clear_history(self):
         if not messagebox.askyesno(
             "Limpar Histórico",

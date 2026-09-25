@@ -45,8 +45,26 @@ GOTHIC_CASTLE = {
     "danger": "#E5484D",
 }
 
-THEMES = {"clean_tech": CLEAN_TECH, "crimson_velvet": CRIMSON_VELVET, "gothic_castle": GOTHIC_CASTLE}
-THEME_DISPLAY_NAMES = {"clean_tech": "Clean Tech", "crimson_velvet": "Crimson Velvet", "gothic_castle": "Gothic Castle"}
+DAYLIGHT = {
+    "window_bg": "#F3F4F6",
+    "card_bg": "#FFFFFF",
+    "border": "#D9DCE1",
+    "text": "#1F2430",
+    "text_dim": "#6B7280",
+    "primary": "#2F6FD1",
+    # success/danger próprios (não os #00A86B/#E5484D compartilhados pelos temas escuros) -
+    # esses dois valores foram calibrados pra contraste contra fundo quase-preto; usados como
+    # TEXTO direto sobre fundo branco (não só preenchimento de botão) ficariam com contraste
+    # fraco (~3:1, abaixo do mínimo de acessibilidade de 4.5:1 pra texto normal). Versões mais
+    # escuras/saturadas aqui.
+    "success": "#128A3E",
+    "danger": "#C81E3A",
+}
+
+THEMES = {"clean_tech": CLEAN_TECH, "crimson_velvet": CRIMSON_VELVET, "gothic_castle": GOTHIC_CASTLE, "daylight": DAYLIGHT}
+# Só os temas "normais" aparecem no seletor manual (gui.py) - Crimson Velvet é exclusivo do
+# Modo Vampiro (easter egg, ver toggle_vampire_mode), nunca escolhível direto no dropdown.
+THEME_DISPLAY_NAMES = {"clean_tech": "Clean Tech", "gothic_castle": "Gothic Castle", "daylight": "Daylight"}
 
 # Paleta categórica fixa pra gráficos (Dashboard) - ordem fixa, nunca ciclada/gerada (ver
 # skill de dataviz: "assign categorical hues in fixed order"). Matizes bem distintos entre
@@ -58,27 +76,42 @@ THEME_DISPLAY_NAMES = {"clean_tech": "Clean Tech", "crimson_velvet": "Crimson Ve
 # fundos escuros (todos os 3 temas são escuros) e distinguível categoria a categoria.
 CHART_COLORS = ["#4B9CD3", "#E0A93E", "#3EC9B0", "#9B7FE0", "#E0719B", "#8B93A1"]
 
-_active_theme_name = "clean_tech"
-
-def get_active_theme() -> dict:
-    return THEMES[_active_theme_name]
+# Modo Vampiro é um FLAG separado da escolha de tema, não "qualquer tema != clean_tech" como
+# na primeira versão - isso fazia Gothic Castle (que é só um tema escuro sóbrio, escolhível
+# manualmente) disparar os mesmos textos/easter eggs do Crimson Velvet (esse sim exclusivo do
+# easter egg). Agora: _manual_theme_name é o que a pessoa escolhe no seletor (nunca
+# crimson_velvet - ele nem aparece no THEME_DISPLAY_NAMES); _vampire_mode só liga/desliga via
+# toggle_vampire_mode() (gatilhos da Fase 5: morcego ou madrugada) e, quando ligado, força o
+# tema pra Crimson Velvet por cima da escolha manual - ao desligar, volta pro tema manual de
+# antes (não reseta pra Clean Tech à força).
+_manual_theme_name = "clean_tech"
+_vampire_mode = False
 
 def get_active_theme_name() -> str:
-    return _active_theme_name
+    return "crimson_velvet" if _vampire_mode else _manual_theme_name
+
+def get_active_theme() -> dict:
+    return THEMES[get_active_theme_name()]
+
+def get_manual_theme_name() -> str:
+    """O tema escolhido manualmente (seletor), sem o Modo Vampiro sobrepor - é o valor que o
+    dropdown deve mostrar, mesmo com o Modo Vampiro ligado por cima."""
+    return _manual_theme_name
 
 def set_active_theme(name: str):
-    global _active_theme_name
-    if name in THEMES:
-        _active_theme_name = name
+    """Troca do seletor manual (gui.py) - nunca aceita 'crimson_velvet' aqui, esse só entra
+    via toggle_vampire_mode()."""
+    global _manual_theme_name
+    if name in THEMES and name != "crimson_velvet":
+        _manual_theme_name = name
 
 def is_vampire_mode() -> bool:
-    return _active_theme_name != "clean_tech"
+    return _vampire_mode
 
 def toggle_vampire_mode():
-    """Liga/desliga o Modo Vampiro (Fase 5) - alterna pro tema Crimson Velvet (o mais
-    "vampiro" dos dois temas escuros do blueprint) e volta pro Clean Tech. Gothic Castle
-    fica disponível pra troca manual futura, mas não faz parte do easter egg dinâmico."""
-    set_active_theme("clean_tech" if is_vampire_mode() else "crimson_velvet")
+    """Liga/desliga o Modo Vampiro (Fase 5) - só mexe no flag, não na escolha manual de tema."""
+    global _vampire_mode
+    _vampire_mode = not _vampire_mode
 
 # Dicionário de termos dinâmicos (blueprint seção 4) - textos que só aparecem trocados
 # quando o Modo Vampiro está ativo. label_for() é a única forma de acessar esses textos
@@ -95,3 +128,28 @@ VAMPIRE_LABELS = {
 def label_for(key: str) -> str:
     normal, vamp = VAMPIRE_LABELS[key]
     return vamp if is_vampire_mode() else normal
+
+def apply_ctk_defaults(theme=None):
+    """Faz o CTkEntry/CTkComboBox/CTkCheckBox/CTkScrollbar de todo o app seguirem a paleta
+    ativa (theme.py) - descoberto testando o tema Daylight: esses widgets nunca recebem
+    fg_color/text_color explícito em nenhuma aba (só CTkFrame/CTkButton/CTkLabel recebem),
+    então ficavam sempre com o cinza-escuro padrão do CustomTkinter (ThemeManager), fixo
+    independente do tema.py - nos temas escuros passava despercebido (cinza-escuro combinava
+    por coincidência), mas no Daylight (claro) virava uma caixa escura solta no meio de um
+    fundo branco. Mais simples que adicionar fg_color/text_color em cada CTkEntry de cada
+    aba: sobrescreve os valores default do ThemeManager global antes de construir os
+    widgets - roda no início de _build_ui()/_rebuild_ui(), então toda troca de tema já
+    aplica de novo nos widgets recriados."""
+    import customtkinter as ctk
+    t = theme or get_active_theme()
+    entry_like = {"fg_color": [t["card_bg"], t["card_bg"]], "border_color": [t["border"], t["border"]],
+                  "text_color": [t["text"], t["text"]], "placeholder_text_color": [t["text_dim"], t["text_dim"]]}
+    ctk.ThemeManager.theme["CTkEntry"].update(entry_like)
+    ctk.ThemeManager.theme["CTkComboBox"].update({**entry_like,
+        "button_color": [t["border"], t["border"]], "button_hover_color": [t["primary"], t["primary"]]})
+    ctk.ThemeManager.theme["CTkCheckBox"].update({
+        "fg_color": [t["primary"], t["primary"]], "border_color": [t["border"], t["border"]],
+        "hover_color": [t["border"], t["border"]], "checkmark_color": ["#ffffff", "#ffffff"],
+        "text_color": [t["text"], t["text"]]})
+    ctk.ThemeManager.theme["CTkScrollbar"].update({
+        "button_color": [t["border"], t["border"]], "button_hover_color": [t["primary"], t["primary"]]})

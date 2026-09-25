@@ -196,17 +196,17 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
 
     def _build_ui(self):
         t=style_ttk()
+        from theme import apply_ctk_defaults
+        apply_ctk_defaults(t)
         # janela toda (tb.Window/"darkly") fica em cima do fundo escuro do ttkbootstrap, que
         # não é exatamente a cor de theme.py - força o mesmo window_bg pra não ter costura de
-        # cor entre o fundo da janela e os cards CustomTkinter por cima. Só na primeira vez:
-        # chamar de novo num _rebuild_ui() (troca de tema) esbarra num bug do CustomTkinter -
-        # o configure(bg=...) da raiz tenta re-sincronizar todos os widgets CTk já destruídos
-        # e quebra com TclError "invalid command name" num deles. Sem necessidade de repetir
-        # mesmo: uma vez com a cor certa já é suficiente, o fundo da raiz nunca aparece de
-        # verdade (fica 100% coberto pelos frames de cima/notebook/baixo).
-        if not getattr(self, "_root_bg_set", False):
-            self.configure(bg=t["window_bg"])
-            self._root_bg_set = True
+        # cor entre o fundo da janela e os cards CustomTkinter por cima. Precisa rodar de novo
+        # em cada _rebuild_ui() (troca de tema) - senão o fundo da raiz ficava preso na cor do
+        # primeiro tema carregado, aparecendo como uma tira escura nas bordas ao trocar pra um
+        # tema claro (Daylight). self.configure(bg=...) direto quebra nessa segunda chamada com
+        # um TclError do CustomTkinter (tenta re-sincronizar widgets CTk já destruídos) - usar
+        # tk.Tk.configure() (sem passar pelo monkeypatch do CustomTkinter) evita o bug.
+        tk.Tk.configure(self, bg=t["window_bg"])
         # grid em vez de pack pra topo/notebook/rodapé: com pack, quando a janela era
         # encolhida abaixo da soma das alturas naturais dos 3, o notebook (expand=True)
         # consumia todo o espaço restante e a barra de baixo ("Salvar Tudo" etc, empacotada
@@ -224,17 +224,18 @@ class App(tb.Window, PerfilTabMixin, BuscaTabMixin, IATabMixin, ExecucaoTabMixin
         ctk.CTkButton(top,text="Importar",width=90,fg_color="transparent",border_width=1,border_color=t["border"],
                       text_color=t["text"],hover_color=t["card_bg"],command=self.import_config).pack(side="right")
         # seletor manual de tema (controle "oficial", complementar ao easter egg do morcego -
-        # esse aqui é descoberto, o do rodapé continua escondido de propósito). Trocar aqui
-        # também aciona o Modo Vampiro (Crimson Velvet/Gothic Castle contam como vampiro,
-        # ver theme.is_vampire_mode) - textos das abas/botões remapeiam igual ao gatilho oculto.
-        from theme import THEME_DISPLAY_NAMES, get_active_theme_name, set_active_theme
+        # esse aqui é descoberto, o do rodapé continua escondido de propósito). Só lista temas
+        # "normais" (Crimson Velvet fica de fora - exclusivo do Modo Vampiro, ver theme.py) e
+        # NÃO mexe no Modo Vampiro: escolher Gothic Castle aqui não vira easter egg, fica só
+        # com a paleta escura séria mesmo, sem os textos remapeados.
+        from theme import THEME_DISPLAY_NAMES, get_manual_theme_name, set_active_theme
         def _on_theme_pick(display_name):
             rev={v:k for k,v in THEME_DISPLAY_NAMES.items()}
             set_active_theme(rev.get(display_name,"clean_tech"))
             self._rebuild_ui()
         combo_theme=ctk.CTkComboBox(top,values=list(THEME_DISPLAY_NAMES.values()),state="readonly",
                                      width=140,command=_on_theme_pick)
-        combo_theme.set(THEME_DISPLAY_NAMES[get_active_theme_name()])
+        combo_theme.set(THEME_DISPLAY_NAMES[get_manual_theme_name()])
         combo_theme.pack(side="right",padx=(0,10))
 
         self.nb=ttk.Notebook(self, style="Vamp.TNotebook"); self.nb.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0,10))

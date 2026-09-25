@@ -128,7 +128,7 @@ def style_ttk(theme=None):
               foreground=[("selected", "#ffffff")])
     return t
 
-def make_scrollable(parent, fg_color="transparent"):
+def make_scrollable(parent, fg_color=None, theme=None):
     """CTkScrollableFrame com scroll do mouse mais robusto. O binding embutido do
     CustomTkinter divide o delta do evento por 6 (`-int(event.delta/6)`) - num mouse comum
     (delta=±120) isso dá 1 unidade tranquilo, mas touchpads precision do Windows mandam
@@ -136,8 +136,19 @@ def make_scrollable(parent, fg_color="transparent"):
     impressão de 'o scroll não funciona'. Aqui a rolagem usa um passo fixo (só olha o sinal
     do delta, não a magnitude), então qualquer evento sempre move visivelmente. Reaproveita
     o _check_if_valid_scroll() nativo do CTkScrollableFrame pra só rolar quando o widget sob
-    o mouse pertence de fato a este frame (necessário já que várias abas têm cada uma o seu)."""
-    sf = ctk.CTkScrollableFrame(parent, fg_color=fg_color)
+    o mouse pertence de fato a este frame (necessário já que várias abas têm cada uma o seu).
+
+    fg_color/bg_color explícitos (não "transparent"): um widget filho com fg_color=
+    "transparent" empacotado direto neste frame (sem passar por um card()) tenta detectar
+    sozinho a cor de fundo herdada subindo a árvore de widgets - e como o canvas interno do
+    CTkScrollableFrame também não tem uma cor "própria" quando fica transparent, a detecção
+    ricocheteia até o tema antigo do ttkbootstrap (raiz da janela) e pega um cinza-escuro fixo
+    (#222222, sempre o mesmo não importa o tema.py ativo). Passava despercebido nos temas
+    escuros (coincidência de tom com o cinza do ttkbootstrap), mas sobrava como uma faixa
+    escura atrás de qualquer label solto (fora de card) no tema Daylight (claro). Dar uma cor
+    sólida de verdade aqui (em vez de "transparent") corta esse ricochete pela raiz."""
+    t = theme or get_active_theme()
+    sf = ctk.CTkScrollableFrame(parent, fg_color=fg_color or t["window_bg"], bg_color=t["window_bg"])
     canvas = sf._parent_canvas
     def _on_wheel(event):
         if not sf._check_if_valid_scroll(event.widget): return
