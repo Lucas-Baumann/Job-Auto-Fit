@@ -1,6 +1,6 @@
 # 🚀 VampHunter - Automação Inteligente de Candidaturas e Otimização ATS (100% Gratuito)
 
-[![Build & Release](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml/badge.svg)](https://github.com/Lucas-Baumann/Job-Auto-Fit/actions/workflows/build.yml)
+[![Build & Release](https://github.com/Lucas-Baumann/VampHunter/actions/workflows/build.yml/badge.svg)](https://github.com/Lucas-Baumann/VampHunter/actions/workflows/build.yml)
 
 O **VampHunter** é uma solução completa em Python (GUI + CLI) criada para automatizar a busca de vagas (LinkedIn, Gupy e APIs abertas), otimizar seu currículo para passar pelos filtros automáticos (ATS) utilizando IA gratuita, realizar o envio de candidaturas e acompanhar o resultado de cada uma.
 
@@ -10,7 +10,7 @@ O **VampHunter** é uma solução completa em Python (GUI + CLI) criada para aut
 
 ## 📥 Download (sem instalar Python)
 
-Baixe o executável pronto para o seu sistema na página de [**Releases**](https://github.com/Lucas-Baumann/Job-Auto-Fit/releases/latest):
+Baixe o executável pronto para o seu sistema na página de [**Releases**](https://github.com/Lucas-Baumann/VampHunter/releases/latest):
 
 * **Windows** → `VampHunter-windows.exe`
 * **Linux** → `VampHunter-linux` (dê `chmod +x` antes de executar)
@@ -190,7 +190,7 @@ Ao terminar o ciclo, o relatório completo é salvo em `reports/relatorio_YYYYMM
 
 ## 🏗️ Compilando o executável / CI
 
-Os binários oficiais (Windows + Linux) são gerados automaticamente pelo GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) a cada tag `vX.Y.Z`, e publicados em [Releases](https://github.com/Lucas-Baumann/Job-Auto-Fit/releases/latest). Para compilar localmente:
+Os binários oficiais (Windows + Linux) são gerados automaticamente pelo GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) a cada tag `vX.Y.Z`, e publicados em [Releases](https://github.com/Lucas-Baumann/VampHunter/releases/latest). Para compilar localmente:
 
 ```bash
 pip install pyinstaller

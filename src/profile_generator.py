@@ -100,12 +100,12 @@ TEMPLATE = """<div align="center">
 
 <a href="https://github.com/{username}/done-flow"><img src="https://img.shields.io/badge/done--flow-React%20Native-61DAFB?style=for-the-badge&logo=react" alt="done-flow" /></a>
 <a href="https://github.com/{username}/Site-para-adocao-de-animais"><img src="https://img.shields.io/badge/Site%20Ado%C3%A7%C3%A3o-React%20TS-3178C6?style=for-the-badge&logo=typescript" alt="Site Adoção" /></a>
-<a href="https://github.com/{username}/Job-Auto-Fit"><img src="https://img.shields.io/badge/Job--Auto--Fit-Python-3776AB?style=for-the-badge&logo=python" alt="Job-Auto-Fit" /></a>
+<a href="https://github.com/{username}/VampHunter"><img src="https://img.shields.io/badge/VampHunter-Python-3776AB?style=for-the-badge&logo=python" alt="VampHunter" /></a>
 
 </div>
 
 <p align="center">
-  <b>done-flow</b> — App de tarefas com categorias (React Native + Expo, TypeScript) • <b>Site Amigos Peludos</b> — Web completa para canil (React + TS, filtros, formulários) • <b>Job-Auto-Fit</b> — Automação de currículos Gupy/LinkedIn com IA + relatórios<br/>
+  <b>done-flow</b> — App de tarefas com categorias (React Native + Expo, TypeScript) • <b>Site Amigos Peludos</b> — Web completa para canil (React + TS, filtros, formulários) • <b>VampHunter</b> — Automação de currículos Gupy/LinkedIn com IA + relatórios<br/>
   <sub>{projects_sub}</sub>
 </p>
 
